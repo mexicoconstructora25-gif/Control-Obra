@@ -1,0 +1,13 @@
+{
+  "background_color": "#ffffff",
+  "dir": "ltr",
+  "display": "standalone",
+  "name": "Control de Obra",
+  "orientation": "any",
+  "scope": "/",
+  "short_name": "ControlObra",
+  "start_url": "/",
+  "theme_color": "#ffffff",
+  "id": "https://mexicoconstructora25-gif.github.io/Control-Obra/",
+  "description": "Dashboard gerencial para control de obra y estimaciones.",
+  "lang": "es"
