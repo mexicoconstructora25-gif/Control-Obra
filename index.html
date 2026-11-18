@@ -1,0 +1,2231 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Gerencial - Control de Obra</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- SheetJS para exportar a Excel -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- Chart.js para gráficas generales -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-100 font-sans">
+
+    <!-- BANNER DE ESTADO OFFLINE / ONLINE -->
+    <div id="bannerOffline" class="bg-amber-500 text-slate-900 text-xs font-bold text-center py-1 px-4 hidden">
+        ⚠️ Sin conexión a internet. Trabajando con la última base de datos guardada localmente.
+    </div>
+
+    <!-- HEADER -->
+    <header class="bg-slate-900 text-white shadow-md">
+        <div class="container mx-auto px-6 py-4 flex justify-between items-center">
+            <div>
+                <h1 id="lblProyectoHeader" class="text-xl font-bold">Cargando Proyecto...</h1>
+                <p class="text-xs text-slate-400">Actualización automática y modo offline inteligente</p>
+            </div>
+            <div class="flex gap-3">
+                <button onclick="cargarDatos()" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded text-sm font-semibold transition flex items-center gap-2">
+                    🔄 Sincronizar Datos
+                </button>
+                <button onclick="exportarExcelGeneral()" class="bg-emerald-600 hover:bg-emerald-700 px-4 py-2 rounded text-sm font-semibold transition flex items-center gap-2">
+                    📥 Descargar Base Completa
+                </button>
+                <button onclick="window.print()" class="bg-amber-600 hover:bg-amber-700 px-4 py-2 rounded text-sm font-semibold transition flex items-center gap-2">
+                    🖨️ Imprimir / PDF
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- CONTENIDO PRINCIPAL -->
+    <main class="container mx-auto px-6 py-8">
+        
+        <!-- TARJETAS KPI GENERALES -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <div class="bg-white p-6 rounded-lg shadow border-l-4 border-blue-500">
+                <p class="text-sm text-gray-500 font-medium">Importe Contratado (c/IVA)</p>
+                <h3 id="kpiContrato" class="text-2xl font-bold text-gray-800">$0.00</h3>
+            </div>
+            <div class="bg-white p-6 rounded-lg shadow border-l-4 border-indigo-500">
+                <p class="text-sm text-gray-500 font-medium">Ajustes al Contrato (Aprobados)</p>
+                <h3 id="kpiAjustes" class="text-2xl font-bold text-gray-800">$0.00</h3>
+            </div>
+            <div class="bg-white p-6 rounded-lg shadow border-l-4 border-emerald-500">
+                <p class="text-sm text-gray-500 font-medium">Valor Actual de la Obra</p>
+                <h3 id="kpiValorActual" class="text-2xl font-bold text-blue-900">$0.00</h3>
+            </div>
+            <div class="bg-white p-6 rounded-lg shadow border-l-4 border-amber-500">
+                <p class="text-sm text-gray-500 font-medium">Estimaciones Emitidas</p>
+                <h3 id="kpiEstimaciones" class="text-2xl font-bold text-gray-800">0</h3>
+            </div>
+        </div>
+
+        <!-- PESTAÑAS DE NAVEGACIÓN -->
+        <div class="flex border-b border-gray-300 mb-6 gap-6 overflow-x-auto">
+            <button onclick="cambiarTab('conceptos')" id="btnTabConceptos" class="pb-2 font-semibold text-blue-600 border-b-2 border-blue-600 focus:outline-none whitespace-nowrap">Conceptos y Partidas</button>
+            <button onclick="cambiarTab('avanceConceptos')" id="btnTabAvanceConceptos" class="pb-2 font-semibold text-gray-500 hover:text-blue-600 focus:outline-none whitespace-nowrap">📊 Avance por Concepto</button>
+            <button onclick="cambiarTab('estimaciones')" id="btnTabEstimaciones" class="pb-2 font-semibold text-gray-500 hover:text-blue-600 focus:outline-none whitespace-nowrap">Estimaciones y Generadores</button>
+            <button onclick="cambiarTab('masmenos')" id="btnTabMasmenos" class="pb-2 font-semibold text-gray-500 hover:text-blue-600 focus:outline-none whitespace-nowrap">Ajustes al Contrato (+/-)</button>
+            <button onclick="cambiarTab('reportes')" id="btnTabReportes" class="pb-2 font-semibold text-gray-500 hover:text-blue-600 focus:outline-none whitespace-nowrap">📈 Reportes y Gráficas</button>
+        </div>
+
+        <!-- SECCIÓN 1: CONCEPTOS -->
+        <div id="tabConceptos" class="tab-content bg-white rounded-lg shadow overflow-hidden p-6">
+            <div class="flex flex-col gap-4 mb-6 border-b pb-4">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-lg font-bold text-gray-800">Catálogo General de Conceptos (Filtros Jerárquicos)</h3>
+                    <div class="flex gap-2 items-center">
+                        <button onclick="exportarConceptosFiltradosExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-2 rounded font-semibold transition flex items-center gap-1 shadow-sm">
+                            📥 Exportar Filtrado a Excel
+                        </button>
+                        <button onclick="window.print()" class="bg-amber-600 hover:bg-amber-700 text-white text-xs px-3 py-2 rounded font-semibold transition flex items-center gap-1 shadow-sm">
+                            🖨️ Exportar a PDF
+                        </button>
+                        <div class="relative">
+                            <button onclick="togglePanelColumnas()" class="bg-slate-800 text-white text-xs px-3 py-2 rounded font-semibold hover:bg-slate-700 flex items-center gap-1">
+                                ⚙️ Ver / Ocultar Columnas
+                            </button>
+                            <div id="panelColumnas" class="hidden absolute right-0 mt-2 w-64 bg-white border border-gray-300 rounded-lg shadow-xl p-4 z-50 max-h-80 overflow-y-auto text-xs">
+                                <div class="flex justify-between items-center mb-2 border-b pb-1">
+                                    <p class="font-bold text-gray-700">Seleccionar Columnas:</p>
+                                    <button onclick="toggleTodasColumnasConceptos(true)" class="text-blue-600 hover:underline font-semibold">Todas</button>
+                                    <button onclick="toggleTodasColumnasConceptos(false)" class="text-red-600 hover:underline font-semibold">Ninguna</button>
+                                </div>
+                                <div id="listaCheckColumns" class="space-y-1"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- FILTROS EN CASCADA E INDEPENDIENTES -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-3">
+                    <select id="filtroProyecto" onchange="onProyectoChange()" class="border border-gray-300 rounded px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500">
+                        <option value="">1. Todos los Proyectos</option>
+                    </select>
+                    <select id="filtroPartida" onchange="onPartidaChange()" class="border border-gray-300 rounded px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500">
+                        <option value="">2. Todas las Partidas</option>
+                    </select>
+                    <select id="filtroSubpartida" onchange="filtrarConceptos()" class="border border-gray-300 rounded px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500">
+                        <option value="">3. Todas las Subpartidas</option>
+                    </select>
+                    <input type="text" id="filtroNCon" placeholder="4. NCon exacto (ej. 25)..." onkeyup="filtrarConceptos()" class="border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
+                    <select id="filtroTipo" onchange="filtrarConceptos()" class="border border-gray-300 rounded px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500">
+                        <option value="">5. Tipo (CAT / EXT)</option>
+                        <option value="CAT">CAT</option>
+                        <option value="EXT">EXT</option>
+                    </select>
+                    <button onclick="limpiarFiltros()" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-2 rounded text-sm font-semibold transition">
+                        Limpiar Filtros 🔄
+                    </button>
+                </div>
+
+                <div class="flex items-center justify-between">
+                    <label class="flex items-center gap-2 text-xs text-gray-600 bg-gray-50 px-3 py-1.5 rounded border border-gray-200 cursor-pointer">
+                        <input type="checkbox" id="chkTooltip" checked class="rounded text-blue-600 focus:ring-blue-500">
+                        Ver descripción completa en hover
+                    </label>
+                    <div id="indicadorFiltroActivo" class="text-xs font-bold text-blue-700 bg-blue-50 px-3 py-1 rounded border border-blue-200 hidden flex items-center gap-2">
+                        <span>Filtro de tarjeta activo: <span id="nombreFiltroActivo"></span></span>
+                        <button onclick="limpiarFiltroTarjeta()" class="text-red-600 hover:text-red-800 font-bold ml-2">❌ Quitar</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RESUMEN DINÁMICO DE PARTIDA / SUBPARTIDA -->
+            <div id="contenedorResumenFiltro" class="mb-6 bg-gradient-to-r from-slate-50 to-blue-50 border border-blue-200 rounded-lg p-5 shadow-sm hidden">
+                <div class="flex flex-col md:flex-row justify-between items-center gap-6">
+                    <div class="w-full md:w-1/2">
+                        <h4 id="tituloResumenFiltro" class="text-sm font-bold text-slate-800 mb-3 border-b pb-2">Resumen de Selección</h4>
+                        <div class="grid grid-cols-3 gap-3 text-center">
+                            <div class="bg-white p-3 rounded shadow-sm border">
+                                <p class="text-xs text-gray-500 font-medium">Monto Total</p>
+                                <p id="sumMontoTotal" class="text-xs sm:text-sm font-bold text-slate-800">$0.00</p>
+                            </div>
+                            <div onclick="filtrarPorTarjeta('estimado')" class="bg-white p-3 rounded shadow-sm border cursor-pointer hover:bg-emerald-50 hover:border-emerald-400 transition transform hover:-translate-y-0.5" title="Clic para filtrar conceptos estimados">
+                                <p class="text-xs text-emerald-600 font-semibold">Monto Estimado 🔍</p>
+                                <p id="sumMontoEstimado" class="text-xs sm:text-sm font-bold text-emerald-700">$0.00</p>
+                            </div>
+                            <div onclick="filtrarPorTarjeta('faltante')" class="bg-white p-3 rounded shadow-sm border cursor-pointer hover:bg-blue-50 hover:border-blue-400 transition transform hover:-translate-y-0.5" title="Clic para filtrar conceptos faltantes">
+                                <p class="text-xs text-blue-600 font-semibold">Monto Faltante 🔍</p>
+                                <p id="sumMontoFaltante" class="text-xs sm:text-sm font-bold text-blue-700">$0.00</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="w-full md:w-1/2 flex justify-center items-center" style="height: 160px;">
+                        <canvas id="graficaPastelFiltro"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TABLA DE CONCEPTOS -->
+            <div class="overflow-y-auto max-h-[600px] border border-gray-200 rounded-lg shadow-inner">
+                <table id="tablaConceptos" class="min-w-full divide-y divide-gray-200 text-xs relative">
+                    <thead class="bg-gray-50 sticky top-0 z-20 shadow-sm">
+                        <tr id="headConceptos">
+                            <th class="col-0 px-3 py-3 text-left font-medium text-gray-500 bg-gray-50">NCon</th>
+                            <th class="col-1 px-3 py-3 text-center font-medium text-gray-500 bg-gray-50">Unidad</th>
+                            <th class="col-2 px-3 py-3 text-right font-medium text-gray-500 bg-gray-50">Cant. Ord</th>
+                            <th class="col-3 px-3 py-3 text-right font-medium text-gray-500 bg-gray-50">Cant. adic</th>
+                            <th class="col-4 px-3 py-3 text-right font-medium text-gray-500 bg-gray-50">Cant. Ext</th>
+                            <th class="col-5 px-3 py-3 text-right font-medium text-gray-500 bg-gray-50">Cant. Real</th>
+                            <th class="col-6 px-3 py-3 text-right font-medium text-gray-500 bg-gray-50">P.U.</th>
+                            <th class="col-7 px-3 py-3 text-right font-medium text-gray-500 bg-gray-50">Monto Total</th>
+                            <th class="col-8 px-3 py-3 text-right font-medium text-gray-500 bg-gray-50">Cant. ord_estim</th>
+                            <th class="col-9 px-3 py-3 text-right font-medium text-gray-500 bg-gray-50">Monto_ord_estim</th>
+                            <th class="col-10 px-3 py-3 text-right font-medium text-gray-500 bg-gray-50">Cant. adi_estim</th>
+                            <th class="col-11 px-3 py-3 text-right font-medium text-gray-500 bg-gray-50">Monto_adi_estim</th>
+                            <th class="col-12 px-3 py-3 text-right font-medium text-gray-500 bg-gray-50">Cant. ext_estim</th>
+                            <th class="col-13 px-3 py-3 text-right font-medium text-gray-500 bg-gray-50">Monto_ext_estim</th>
+                            <th class="col-14 px-3 py-3 text-right font-medium text-gray-500 bg-gray-50">Cant. total_estim</th>
+                            <th class="col-15 px-3 py-3 text-right font-medium text-gray-500 bg-gray-50">Monto_total_estim</th>
+                            <th class="col-16 px-3 py-3 text-right font-medium text-gray-500 bg-gray-50">Cant. ordpor_estimar</th>
+                            <th class="col-17 px-3 py-3 text-right font-medium text-gray-500 bg-gray-50">Monto ordpor_estimar</th>
+                            <th class="col-18 px-3 py-3 text-right font-medium text-gray-500 bg-gray-50">Cant. adipor_estimar</th>
+                            <th class="col-19 px-3 py-3 text-right font-medium text-gray-500 bg-gray-50">Monto adipor_estimar</th>
+                            <th class="col-20 px-3 py-3 text-right font-medium text-gray-500 bg-gray-50">Cant. extpor_estimar</th>
+                            <th class="col-21 px-3 py-3 text-right font-medium text-gray-500 bg-gray-50">Monto extpor_estimar</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200 bg-white"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- SECCIÓN 2: AVANCE POR CONCEPTO -->
+        <div id="tabAvanceConceptos" class="tab-content bg-white rounded-lg shadow overflow-hidden p-6 hidden">
+            <div class="flex flex-col gap-4 mb-4 border-b pb-4">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h3 class="text-lg font-bold text-gray-800">Avance Físico y Financiero por Concepto</h3>
+                        <p class="text-xs text-gray-500">Comparativa detallada con códigos de color de ejecución y estimación.</p>
+                    </div>
+                    <div class="flex gap-2 items-center">
+                        <button onclick="exportarAvanceConceptosExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-2 rounded font-semibold transition flex items-center gap-1 shadow-sm">
+                            📥 Exportar a Excel
+                        </button>
+                        <button onclick="window.print()" class="bg-amber-600 hover:bg-amber-700 text-white text-xs px-3 py-2 rounded font-semibold transition flex items-center gap-1 shadow-sm">
+                            🖨️ Exportar a PDF
+                        </button>
+                        <div class="relative">
+                            <button onclick="togglePanelColumnasAvance()" class="bg-slate-800 text-white text-xs px-3 py-2 rounded font-semibold hover:bg-slate-700 flex items-center gap-1">
+                                ⚙️ Ver / Ocultar Columnas
+                            </button>
+                            <div id="panelColumnasAvance" class="hidden absolute right-0 mt-2 w-64 bg-white border border-gray-300 rounded-lg shadow-xl p-4 z-50 max-h-80 overflow-y-auto text-xs">
+                                <div class="flex justify-between items-center mb-2 border-b pb-1">
+                                    <p class="font-bold text-gray-700">Seleccionar Columnas:</p>
+                                    <button onclick="toggleTodasColumnasAvance(true)" class="text-blue-600 hover:underline font-semibold">Todas</button>
+                                    <button onclick="toggleTodasColumnasAvance(false)" class="text-red-600 hover:underline font-semibold">Ninguna</button>
+                                </div>
+                                <div id="listaCheckColumnsAvance" class="space-y-1"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CONTROLES ADICIONALES -->
+                <div class="flex flex-col sm:flex-row justify-between items-center gap-4 bg-slate-50 p-3 rounded-lg border border-slate-200">
+                    <div class="flex gap-2 w-full sm:w-auto">
+                        <select id="filtroProyectoAvance" onchange="sincronizarProyectoDesdeAvance()" class="border border-gray-300 rounded px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500">
+                            <option value="">📁 Todos los Proyectos</option>
+                        </select>
+                        <input type="text" id="buscadorNConAvance" placeholder="🔍 NCon exacto (ej. 25)..." onkeyup="renderizarAvanceConceptos()" class="w-full sm:w-60 border border-gray-300 rounded px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <label class="flex items-center gap-2 text-xs text-gray-700 font-medium cursor-pointer">
+                        <input type="checkbox" id="chkTooltipAvance" checked onchange="renderizarAvanceConceptos()" class="rounded text-blue-600 focus:ring-blue-500">
+                        Mostrar descripción al pasar el ratón (Tooltip)
+                    </label>
+                </div>
+            </div>
+
+            <!-- PANEL INTERACTIVO DE DESGLOSE -->
+            <div id="panelDesgloseConcepto" class="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-4 shadow-sm hidden">
+                <div class="flex justify-between items-center mb-3 border-b border-blue-200 pb-2">
+                    <h4 id="tituloDesgloseConcepto" class="text-xs font-bold text-blue-900">Desglose de Concepto</h4>
+                    <button onclick="cerrarPanelDesglose()" class="text-red-600 hover:text-red-800 text-xs font-bold px-2 py-0.5 rounded bg-white border border-red-200 shadow-sm">❌ Cerrar Panel</button>
+                </div>
+                
+                <div class="space-y-3">
+                    <div>
+                        <p class="text-[11px] font-bold text-slate-700 mb-1">📈 Estimaciones donde participa:</p>
+                        <div id="contenedorEtiquetasEstimaciones" class="flex flex-wrap gap-2 items-center"></div>
+                    </div>
+                    <div>
+                        <p class="text-[11px] font-bold text-slate-700 mb-1">⚙️ Ajustes al Contrato (+/-) donde participa:</p>
+                        <div id="contenedorEtiquetasAjustes" class="flex flex-wrap gap-2 items-center"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TABLA AVANCE -->
+            <div class="overflow-y-auto max-h-[600px] border border-gray-200 rounded-lg shadow-inner">
+                <table id="tablaAvanceConceptos" class="min-w-full divide-y divide-gray-200 text-xs relative">
+                    <thead class="bg-gray-50 sticky top-0 z-20 shadow-sm">
+                        <tr id="headAvanceConceptos">
+                            <th class="col-av-0 px-4 py-3 text-left font-medium text-gray-500 bg-gray-50">NCon</th>
+                            <th class="col-av-1 px-4 py-3 text-center font-medium text-gray-500 bg-gray-50">% de avance</th>
+                            <th class="col-av-2 px-4 py-3 text-right font-medium text-gray-500 bg-gray-50">P.U.</th>
+                            <th class="col-av-3 px-4 py-3 text-right font-medium text-gray-500 bg-gray-50">Cant. Ord</th>
+                            <th class="col-av-4 px-4 py-3 text-right font-medium text-gray-500 bg-gray-50">Cant. Adic</th>
+                            <th class="col-av-5 px-4 py-3 text-right font-medium text-gray-500 bg-gray-50">Cant. Real</th>
+                            <th class="col-av-6 px-4 py-3 text-right font-medium text-gray-500 bg-gray-50">Monto Real</th>
+                            <th class="col-av-7 px-4 py-3 text-right font-medium text-gray-500 bg-gray-50">Cant. total_estim</th>
+                            <th class="col-av-8 px-4 py-3 text-right font-medium text-gray-500 bg-gray-50">Monto total_estim</th>
+                            <th class="col-av-9 px-4 py-3 text-right font-medium text-gray-500 bg-gray-50">Cant. total por estim</th>
+                            <th class="col-av-10 px-4 py-3 text-right font-medium text-gray-500 bg-gray-50">Monto total por estim</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200 bg-white"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- SECCIÓN 3: ESTIMACIONES -->
+        <div id="tabEstimaciones" class="tab-content bg-white rounded-lg shadow overflow-hidden p-6 hidden">
+            <div class="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4">
+                <div class="flex items-center gap-3">
+                    <h3 class="text-lg font-bold text-gray-800">Historial de Estimaciones y Generadores</h3>
+                    <select id="filtroProyectoEst" onchange="renderizarTablaEstimaciones()" class="border border-gray-300 rounded px-3 py-1.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 font-semibold text-slate-700">
+                        <option value="">📁 Todos los Proyectos</option>
+                    </select>
+                </div>
+                <div class="flex gap-2 items-center">
+                    <button onclick="exportarEstimacionesFiltradasExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-2 rounded font-semibold transition flex items-center gap-1 shadow-sm">
+                        📥 Exportar Filtrado a Excel
+                    </button>
+                    <button onclick="window.print()" class="bg-amber-600 hover:bg-amber-700 text-white text-xs px-3 py-2 rounded font-semibold transition flex items-center gap-1 shadow-sm">
+                        🖨️ Exportar a PDF
+                    </button>
+                    <div class="relative">
+                        <button onclick="togglePanelColumnasEst()" class="bg-slate-800 text-white text-xs px-3 py-2 rounded font-semibold hover:bg-slate-700 flex items-center gap-1">
+                            ⚙️ Ver / Ocultar Columnas
+                        </button>
+                        <div id="panelColumnasEst" class="hidden absolute right-0 mt-2 w-64 bg-white border border-gray-300 rounded-lg shadow-xl p-4 z-50 max-h-80 overflow-y-auto text-xs">
+                            <div class="flex justify-between items-center mb-2 border-b pb-1">
+                                <p class="font-bold text-gray-700">Seleccionar Columnas:</p>
+                                <button onclick="toggleTodasColumnasEst(true)" class="text-blue-600 hover:underline font-semibold">Todas</button>
+                                <button onclick="toggleTodasColumnasEst(false)" class="text-red-600 hover:underline font-semibold">Ninguna</button>
+                            </div>
+                            <div id="listaCheckColumnsEst" class="space-y-1"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RESUMEN FINANCIERO DE ESTIMACIONES -->
+            <div id="contenedorResumenEst" class="mb-6 bg-gradient-to-r from-slate-50 to-blue-50 border border-blue-200 rounded-lg p-5 shadow-sm">
+                <div class="flex flex-col md:flex-row justify-between items-center gap-6">
+                    <div class="w-full md:w-1/2">
+                        <h4 class="text-sm font-bold text-slate-800 mb-3 border-b pb-2">Resumen Financiero por Tipo de Estimación</h4>
+                        <div class="grid grid-cols-2 gap-3 text-center">
+                            <div onclick="filtrarEstimacionesPorTipo('TODAS')" class="bg-white p-3 rounded shadow-sm border cursor-pointer hover:bg-blue-50 transition" title="Clic para ver todas">
+                                <p class="text-xs text-gray-500 font-medium">Monto Total Estimado 🔍</p>
+                                <p id="sumEstTotal" class="text-xs sm:text-sm font-bold text-slate-800">$0.00</p>
+                            </div>
+                            <div onclick="filtrarEstimacionesPorTipo('Ordinario')" class="bg-white p-3 rounded shadow-sm border cursor-pointer hover:bg-blue-50 transition" title="Clic para filtrar Ordinarias">
+                                <p class="text-xs text-blue-600 font-semibold">Monto Ordinario 🔍</p>
+                                <p id="sumEstOrdinario" class="text-xs sm:text-sm font-bold text-blue-700">$0.00</p>
+                            </div>
+                            <div onclick="filtrarEstimacionesPorTipo('Adicional')" class="bg-white p-3 rounded shadow-sm border cursor-pointer hover:bg-indigo-50 transition" title="Clic para filtrar Adicionales">
+                                <p class="text-xs text-indigo-600 font-semibold">Monto Adicional 🔍</p>
+                                <p id="sumEstAdicional" class="text-xs sm:text-sm font-bold text-indigo-700">$0.00</p>
+                            </div>
+                            <div onclick="filtrarEstimacionesPorTipo('Extraordinario')" class="bg-white p-3 rounded shadow-sm border cursor-pointer hover:bg-emerald-50 transition" title="Clic para filtrar Extraordinarias">
+                                <p class="text-xs text-emerald-600 font-semibold">Monto Extraordinario 🔍</p>
+                                <p id="sumEstExtraordinario" class="text-xs sm:text-sm font-bold text-emerald-700">$0.00</p>
+                            </div>
+                        </div>
+                        <div id="indicadorFiltroEstActivo" class="mt-3 text-xs font-bold text-blue-700 bg-blue-50 px-3 py-1.5 rounded border border-blue-200 hidden flex items-center justify-between">
+                            <span>Filtro activo: <span id="nombreFiltroEstActivo"></span></span>
+                            <button onclick="filtrarEstimacionesPorTipo('TODAS')" class="text-red-600 hover:text-red-800 font-bold ml-2">❌ Quitar Filtro</button>
+                        </div>
+                    </div>
+                    <div class="w-full md:w-1/2 flex justify-center items-center" style="height: 180px;">
+                        <canvas id="graficaPastelEstimaciones"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TABLA ESTIMACIONES -->
+            <div class="overflow-y-auto max-h-[600px] border border-gray-200 rounded-lg shadow-inner">
+                <table id="tablaEstimaciones" class="min-w-full divide-y divide-gray-200 text-xs relative">
+                    <thead class="bg-gray-50 sticky top-0 z-20 shadow-sm">
+                        <tr id="headEstimaciones">
+                            <th class="col-est-0 px-3 py-3 text-left font-medium text-gray-500 bg-gray-50">N° Est</th>
+                            <th class="col-est-1 px-3 py-3 text-right font-medium text-gray-500 bg-gray-50">Acumulado anterior</th>
+                            <th class="col-est-2 px-3 py-3 text-right font-medium text-gray-500 bg-gray-50">Acumulado</th>
+                            <th class="col-est-3 px-3 py-3 text-right font-medium text-gray-500 bg-gray-50">Monto</th>
+                            <th class="col-est-4 px-3 py-3 text-right font-medium text-gray-500 bg-gray-50">Amortizacion</th>
+                            <th class="col-est-5 px-3 py-3 text-right font-medium text-gray-500 bg-gray-50">Subtotal</th>
+                            <th class="col-est-6 px-3 py-3 text-right font-medium text-gray-500 bg-gray-50">I.V.A.</th>
+                            <th class="col-est-7 px-3 py-3 text-right font-medium text-gray-500 bg-gray-50">Total</th>
+                            <th class="col-est-8 px-3 py-3 text-right font-medium text-gray-500 bg-gray-50">Retención</th>
+                            <th class="col-est-9 px-3 py-3 text-right font-medium text-gray-500 bg-gray-50">Importe líquido</th>
+                            <th class="col-est-10 px-3 py-3 text-right font-medium text-gray-500 bg-gray-50">90%</th>
+                            <th class="col-est-11 px-3 py-3 text-right font-medium text-gray-500 bg-gray-50">10%</th>
+                            <th class="col-est-12 px-3 py-3 text-left font-medium text-gray-500 bg-gray-50">Periodo (Del - Al)</th>
+                            <th class="col-est-13 px-3 py-3 text-left font-medium text-gray-500 bg-gray-50">Fecha</th>
+                            <th class="col-est-14 px-3 py-3 text-left font-medium text-gray-500 bg-gray-50">Tipo</th>
+                            <th class="col-est-15 px-3 py-3 text-left font-medium text-gray-500 bg-gray-50">Estatus</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200 bg-white"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- SECCIÓN 4: MASMENOS -->
+        <div id="tabMasmenos" class="tab-content bg-white rounded-lg shadow overflow-hidden p-6 hidden">
+            <div class="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4">
+                <h3 class="text-lg font-bold text-gray-800">Ajustes al Contrato (+/-)</h3>
+                <select id="filtroProyectoMasmenos" onchange="renderizarDashboard()" class="border border-gray-300 rounded px-3 py-1.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 font-semibold text-slate-700">
+                    <option value="">📁 Todos los Proyectos</option>
+                </select>
+            </div>
+            
+            <div id="contenedorTarjetasMasmenos" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4 mb-6"></div>
+
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-4 bg-slate-50 p-3 rounded-lg border border-slate-200">
+                <div class="flex flex-wrap gap-2 items-center text-xs">
+                    <span class="font-bold text-slate-700 mr-2">Filtrar Categoría (Múltiple):</span>
+                    <button onclick="toggleCatFiltro('todos')" id="btnCatTodos" class="px-3 py-1.5 rounded font-semibold bg-slate-900 text-white transition">✓ Todos</button>
+                    <button onclick="toggleCatFiltro('incremento')" id="btnCatIncremento" class="px-3 py-1.5 rounded font-semibold bg-blue-100 text-blue-800 hover:bg-blue-200 transition">🔵 Incremento</button>
+                    <button onclick="toggleCatFiltro('decremento')" id="btnCatDecremento" class="px-3 py-1.5 rounded font-semibold bg-red-100 text-red-800 hover:bg-red-200 transition">🔴 Decremento</button>
+                    <button onclick="toggleCatFiltro('eliminado')" id="btnCatEliminado" class="px-3 py-1.5 rounded font-semibold bg-black text-white hover:bg-gray-800 transition">⚫ Eliminado</button>
+                    <button onclick="toggleCatFiltro('extraordinario')" id="btnCatExtraordinario" class="px-3 py-1.5 rounded font-semibold bg-orange-100 text-orange-800 hover:bg-orange-200 transition">🟠 Extraordinario</button>
+                </div>
+                <button onclick="filtrarAjusteMasmenos('TODOS')" id="btnQuitarFiltroMasmenos" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-1.5 rounded text-xs font-semibold transition hidden">
+                    🔄 Quitar Filtro de Ajuste Master
+                </button>
+            </div>
+
+            <!-- TRES TARJETAS DE TOTALES (ESTIMADO, FALTA POR ESTIMAR Y ELIMINADO TOTAL) -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+                <div class="bg-emerald-50 border border-emerald-200 p-4 rounded-lg shadow-sm flex items-center justify-between">
+                    <div>
+                        <p class="text-xs text-emerald-700 font-semibold">Monto Estimado Total (Ajustes Filtrados)</p>
+                        <h4 id="lblTotalMontoEstimadoMasmenos" class="text-lg font-bold text-emerald-800">$0.00</h4>
+                    </div>
+                    <span class="text-2xl">📈</span>
+                </div>
+                <div class="bg-blue-50 border border-blue-200 p-4 rounded-lg shadow-sm flex items-center justify-between">
+                    <div>
+                        <p class="text-xs text-blue-700 font-semibold">Falta por Estimar Total (Ajustes Filtrados)</p>
+                        <h4 id="lblTotalFaltaEstimarMasmenos" class="text-lg font-bold text-blue-800">$0.00</h4>
+                    </div>
+                    <span class="text-2xl">⏳</span>
+                </div>
+                <!-- TARJETA FILTRO DE MONTO ELIMINADO TOTAL -->
+                <div onclick="toggleFiltroEliminadoTotal()" class="bg-red-50 border border-red-200 p-4 rounded-lg shadow-sm flex items-center justify-between cursor-pointer hover:bg-red-100 transition transform hover:-translate-y-0.5" title="Clic para filtrar únicamente la tabla por Eliminados / Decrementos">
+                    <div>
+                        <p class="text-xs text-red-700 font-semibold">Monto Eliminado Total 🔍</p>
+                        <h4 id="lblTotalMontoEliminadoMasmenos" class="text-lg font-bold text-red-800">$0.00</h4>
+                    </div>
+                    <span class="text-2xl">🗑️</span>
+                </div>
+            </div>
+
+            <div class="flex justify-between items-center mb-3">
+                <h4 id="tituloTablaMasmenos" class="font-bold text-gray-700 text-sm">Detalle de Conceptos del Ajuste</h4>
+                <div class="flex gap-2">
+                    <button onclick="exportarMasMenosFiltradoExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-2 rounded font-semibold transition flex items-center gap-1 shadow-sm">
+                        📥 Exportar Filtrado a Excel
+                    </button>
+                    <button onclick="exportarMasMenosFiltradoPDF()" class="bg-amber-600 hover:bg-amber-700 text-white text-xs px-3 py-2 rounded font-semibold transition flex items-center gap-1 shadow-sm">
+                        🖨️ Exportar Filtrado al PDF
+                    </button>
+                </div>
+            </div>
+
+            <!-- TABLA MASMENOS -->
+            <div class="overflow-y-auto max-h-[600px] border border-gray-200 rounded-lg shadow-inner">
+                <table id="tablaMasmenos" class="min-w-full divide-y divide-gray-200 text-xs sm:text-sm relative">
+                    <thead class="bg-gray-50 sticky top-0 z-20 shadow-sm">
+                        <tr>
+                            <th class="px-3 py-3 text-left font-medium text-gray-500 bg-gray-50">N° Ajuste</th>
+                            <th class="px-3 py-3 text-left font-medium text-gray-500 bg-gray-50">NCon</th>
+                            <th class="px-3 py-3 text-right font-medium text-gray-500 bg-gray-50">Cantidad Ajuste</th>
+                            <th class="px-3 py-3 text-right font-medium text-gray-500 bg-gray-50">P.U.</th>
+                            <th class="px-3 py-3 text-right font-medium text-gray-500 bg-gray-50">Monto Total</th>
+                            <th class="px-3 py-3 text-right font-medium text-gray-500 bg-gray-50">Monto Estimado</th>
+                            <th class="px-3 py-3 text-right font-medium text-gray-500 bg-gray-50">Falta por Estimar</th>
+                            <th class="px-3 py-3 text-center font-medium text-gray-500 bg-gray-50">Categoría</th>
+                            <th class="px-3 py-3 text-left font-medium text-gray-500 bg-gray-50">Estatus</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200 bg-white"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- SECCIÓN 5: REPORTES Y GRÁFICAS -->
+        <div id="tabReportes" class="tab-content bg-white rounded-lg shadow p-6 hidden">
+            <div class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4 border-b pb-4">
+                <div>
+                    <h3 class="text-lg font-bold text-gray-800">Generador de Reportes Analíticos</h3>
+                    <p class="text-xs text-gray-500">Selecciona el tipo de reporte para visualizar su gráfica y tabla de resultados.</p>
+                </div>
+                <div class="flex items-center gap-3 w-full md:w-auto">
+                    <select id="selectTipoReporte" onchange="generarReporte()" class="border border-gray-300 rounded px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500">
+                        <option value="partidas">1. Resumen por Partida (Importe Original)</option>
+                        <option value="estimaciones">2. Historial de Estimaciones</option>
+                        <option value="masmenos">3. Detalle de Ajustes al Contrato (+/-)</option>
+                    </select>
+                    <button onclick="exportarReporteActualExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded text-sm font-semibold transition flex items-center gap-2 whitespace-nowrap">
+                        📥 Descargar Reporte Excel
+                    </button>
+                </div>
+            </div>
+
+            <div class="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-8 flex justify-center items-center" style="height: 350px;">
+                <canvas id="graficaReporte"></canvas>
+            </div>
+
+            <h4 id="tituloReporteTabla" class="font-bold text-gray-700 mb-3">Detalle del Reporte</h4>
+            <div class="overflow-y-auto max-h-[500px] border border-gray-200 rounded-lg shadow-inner">
+                <table id="tablaReporte" class="min-w-full divide-y divide-gray-200 text-sm relative">
+                    <thead class="bg-gray-50 sticky top-0 z-20 shadow-sm">
+                        <tr id="headReporte"></tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200 bg-white" id="bodyReporte"></tbody>
+                </table>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- SCRIPT DE CONEXIÓN Y LÓGICA OFFLINE/ONLINE -->
+    <script>
+        const API_URL = 'https://script.google.com/macros/s/AKfycbzwgTGotVexwH-zJnk7IzjYSbU57wDgKN8WAsuTck4niX0tnNQwPuZdW4TamGGhuoc1dQ/exec';
+        const STORAGE_KEY = 'control_obra_globalData_cache';
+
+        let globalData = {};
+        let miChart = null;
+        let miPieChart = null;
+        let miPieChartEst = null;
+        let datosReporteActual = [];
+        let nombreReporteActual = "Reporte_Obra";
+        let filtroTarjetaActivo = null;
+        let filtroTipoEstimacionActivo = 'TODAS';
+        let filtroAjusteMasmenosActivo = 'TODOS';
+        
+        let categoriasSeleccionadas = {
+            incremento: true,
+            decremento: true,
+            eliminado: true,
+            extraordinario: true
+        };
+        
+        let datosMasMenosFiltradosActuales = [];
+        let datosConceptosFiltradosActuales = [];
+        let datosEstimacionesFiltradasActuales = [];
+        let datosAvanceConceptosActuales = [];
+        
+        let columnasVisibles = Array(22).fill(true);
+        const nombresColumnas = [
+            "NCon", "Unidad", "Cant. Ord", "Cant. adic", "Cant. Ext", "Cant. Real", "P.U.", "Monto Total",
+            "Cant. ord_estim", "Monto_ord_estim", "Cant. adi_estim", "Monto_adi_estim", "Cant. ext_estim", "Monto_ext_estim",
+            "Cant. total_estim", "Monto_total_estim", "Cant. ordpor_estimar", "Monto ordpor_estimar",
+            "Cant. adipor_estimar", "Monto adipor_estimar", "Cant. extpor_estimar", "Monto extpor_estimar"
+        ];
+
+        let columnasVisiblesEst = Array(16).fill(true);
+        const nombresColumnasEst = [
+            "N° Est", "Acumulado anterior", "Acumulado", "Monto", "Amortizacion", "Subtotal", "I.V.A.", "Total", "Retención", "Importe líquido", "90%", "10%", "Periodo (Del - Al)", "Fecha", "Tipo", "Estatus"
+        ];
+
+        let columnasVisiblesAvance = Array(11).fill(true);
+        const nombresColumnasAvance = [
+            "NCon", "% de avance", "P.U.", "Cant. Ord", "Cant. Adic", "Cant. Real", "Monto Real", "Cant. total_estim", "Monto total_estim", "Cant. total por estim", "Monto total por estim"
+        ];
+
+        function redondear2(num) {
+            return Math.round((num + Number.EPSILON) * 100) / 100;
+        }
+
+        function formatearMoneda(valor) {
+            let numero = parseFloat(String(valor).replace(/[^0-9.-]+/g, ""));
+            if (isNaN(numero)) numero = 0;
+            return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(numero);
+        }
+
+        function formatearNumero(valor) {
+            let numero = parseFloat(String(valor).replace(/[^0-9.-]+/g, ""));
+            if (isNaN(numero)) numero = 0;
+            return new Intl.NumberFormat('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(numero);
+        }
+
+        function formatearFechaCorta(fechaStr) {
+            if (!fechaStr) return '';
+            let fecha = new Date(fechaStr);
+            if (!isNaN(fecha.getTime())) {
+                return fecha.toLocaleDateString('es-MX', { year: 'numeric', month: '2-digit', day: '2-digit' });
+            }
+            return fechaStr;
+        }
+
+        function normalizarTipoEstimacion(rawTipo) {
+            let t = String(rawTipo || '').trim().toLowerCase();
+            if (t === 'ordinario' || t === 'ordinaria') return 'Ordinario';
+            if (t === 'adicional') return 'Adicional';
+            if (t === 'extraordinario' || t === 'extraordinaria') return 'Extraordinario';
+            return rawTipo || 'Ordinario';
+        }
+
+        function generarGraficoCircularSVG(porcentaje) {
+            let pct = parseFloat(porcentaje);
+            if (isNaN(pct)) pct = 0;
+            if (pct > 100) pct = 100;
+            if (pct < 0) pct = 0;
+
+            let radio = 16;
+            let circunferencia = 2 * Math.PI * radio;
+            let desplazamiento = circunferencia - (pct / 100) * circunferencia;
+
+            let colorHex = '#ef4444';
+            if (pct >= 50 && pct < 100) colorHex = '#f59e0b';
+            if (pct >= 100) colorHex = '#10b981';
+
+            return `
+                <div class="flex items-center justify-center gap-2">
+                    <svg class="w-10 h-10 transform -rotate-90" viewBox="0 0 36 36">
+                        <path class="text-gray-200" stroke-width="3.5" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                        <path stroke="${colorHex}" stroke-dasharray="${circunferencia}" stroke-dashoffset="${desplazamiento}" stroke-width="3.5" stroke-linecap="round" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                    </svg>
+                    <span class="text-xs font-bold text-gray-700 w-9 text-right">${pct.toFixed(0)}%</span>
+                </div>
+            `;
+        }
+
+        // --- SISTEMA INTELIGENTE DE CARGA (ONLINE / OFFLINE) ---
+        async function cargarDatos() {
+            let banner = document.getElementById('bannerOffline');
+            
+            if (navigator.onLine) {
+                try {
+                    document.getElementById('lblProyectoHeader').innerText = 'Sincronizando con Google Sheets...';
+                    let response = await fetch(API_URL);
+                    globalData = await response.json();
+                    
+                    // Guardar copia exacta en localStorage para respaldo offline
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(globalData));
+                    
+                    banner.classList.add('hidden');
+                    procesarDatosCargados();
+                    return;
+                } catch (error) {
+                    console.warn('Fallo la red, intentando recuperar respaldo local...', error);
+                }
+            }
+
+            // Si no hay internet o falló la petición, cargamos del localStorage
+            let datosGuardados = localStorage.getItem(STORAGE_KEY);
+            if (datosGuardados) {
+                globalData = JSON.parse(datosGuardados);
+                banner.classList.remove('hidden');
+                procesarDatosCargados();
+            } else {
+                document.getElementById('lblProyectoHeader').innerText = 'Sin conexión y sin datos en caché previa';
+                alert('No hay internet y tampoco se encontró una base de datos guardada previamente en este equipo.');
+            }
+        }
+
+        function procesarDatosCargados() {
+            renderizarDashboard();
+            inicializarFiltrosCascada();
+            construirPanelColumnas();
+            construirPanelColumnasEst();
+            construirPanelColumnasAvance();
+            filtrarConceptos();
+            renderizarAvanceConceptos();
+            generarReporte();
+        }
+
+        function renderizarDashboard() {
+            let importeBase = 0;
+            if (globalData.Proyecto && globalData.Proyecto.length > 0) {
+                let p = globalData.Proyecto[0];
+                let selProy = document.getElementById('filtroProyecto');
+                if (selProy && selProy.value === "") {
+                    document.getElementById('lblProyectoHeader').innerText = p.NombreP || 'Proyecto de Obra';
+                }
+                importeBase = parseFloat(String(p.importeorisivaP || '0').replace(/[^0-9.-]+/g, "")) || 0;
+                document.getElementById('kpiContrato').innerText = formatearMoneda(importeBase);
+            }
+
+            let totalAjustesAprobados = 0;
+            let mapaDiferenciasAjustes = {};
+            
+            if (globalData.Det_Masmenos) {
+                globalData.Det_Masmenos.forEach(det => {
+                    let idMasMenos = String(det['id+-'] || '').trim();
+                    let montoDet = parseFloat(String(det['Monto+-'] || '0').replace(/[^0-9.-]+/g, ""));
+                    if (!isNaN(montoDet)) {
+                        mapaDiferenciasAjustes[idMasMenos] = redondear2((mapaDiferenciasAjustes[idMasMenos] || 0) + montoDet);
+                    }
+                });
+            }
+
+            if (globalData.Masmenos) {
+                globalData.Masmenos.forEach(m => {
+                    let idMasMenos = String(m['id+-']).trim();
+                    let estatus = String(m['status+-'] || '').trim().toLowerCase();
+                    if (estatus === 'aprobado') {
+                        let difAjuste = mapaDiferenciasAjustes[idMasMenos] || 0;
+                        totalAjustesAprobados = redondear2(totalAjustesAprobados + difAjuste);
+                    }
+                });
+            }
+
+            let valorActualObra = redondear2(importeBase + totalAjustesAprobados);
+            document.getElementById('kpiAjustes').innerText = formatearMoneda(totalAjustesAprobados);
+            document.getElementById('kpiValorActual').innerText = formatearMoneda(valorActualObra);
+
+            if (globalData.Estimaciones) {
+                document.getElementById('kpiEstimaciones').innerText = globalData.Estimaciones.length;
+            }
+
+            renderizarSeccionMasMenos(mapaDiferenciasAjustes);
+            renderizarTablaEstimaciones();
+        }
+
+        function renderizarTablaEstimaciones() {
+            let tbodyEst = document.querySelector('#tablaEstimaciones tbody');
+            tbodyEst.innerHTML = '';
+            datosEstimacionesFiltradasActuales = [];
+
+            let proyectoEstSel = document.getElementById('filtroProyectoEst').value;
+
+            if (globalData.Estimaciones) {
+                let estimacionesOrdenadas = [...globalData.Estimaciones].filter(e => {
+                    if (proyectoEstSel === "") return true;
+                    return String(e.Idproyecto || '').trim() === proyectoEstSel;
+                }).sort((a, b) => {
+                    let nestA = parseFloat(String(a.NEst || 0).replace(/[^0-9.-]+/g, ""));
+                    let nestB = parseFloat(String(b.NEst || 0).replace(/[^0-9.-]+/g, ""));
+                    if (isNaN(nestA) || isNaN(nestB)) {
+                        return String(a.NEst || '').localeCompare(String(b.NEst || ''));
+                    }
+                    return nestA - nestB;
+                });
+
+                let mapaPU = {};
+                if (globalData.conceptos) {
+                    globalData.conceptos.forEach(c => {
+                        let idCon = String(c.IDcon || '').trim();
+                        let pu = parseFloat(String(c['P.U.Con'] || 0).replace(/[^0-9.-]+/g, "")) || 0;
+                        if (idCon) mapaPU[idCon] = pu;
+                    });
+                }
+
+                let mapaMontoEst = {};
+                if (globalData.Generadores) {
+                    globalData.Generadores.forEach(g => {
+                        let idEst = String(g.IdEst || '').trim();
+                        let idCon = String(g.IDcon || '').trim();
+                        let paraEsta = parseFloat(String(g['para esta'] || 0).replace(/[^0-9.-]+/g, ""));
+                        let pu = mapaPU[idCon] || 0;
+                        if (idEst && !isNaN(paraEsta)) {
+                            mapaMontoEst[idEst] = redondear2((mapaMontoEst[idEst] || 0) + (paraEsta * pu));
+                        }
+                    });
+                }
+
+                let totalEstSum = 0;
+                let ordinarioSum = 0;
+                let adicionalSum = 0;
+                let extraordinarioSum = 0;
+
+                estimacionesOrdenadas.forEach(e => {
+                    let idEst = String(e.IdEst || '').trim();
+                    let montoEst = mapaMontoEst[idEst] || 0;
+                    totalEstSum = redondear2(totalEstSum + montoEst);
+
+                    let tipoExacto = normalizarTipoEstimacion(e.tipoEst);
+                    if (tipoExacto === 'Ordinario') ordinarioSum = redondear2(ordinarioSum + montoEst);
+                    else if (tipoExacto === 'Adicional') adicionalSum = redondear2(adicionalSum + montoEst);
+                    else if (tipoExacto === 'Extraordinario') extraordinarioSum = redondear2(extraordinarioSum + montoEst);
+                });
+
+                document.getElementById('sumEstTotal').innerText = formatearMoneda(totalEstSum);
+                document.getElementById('sumEstOrdinario').innerText = formatearMoneda(ordinarioSum);
+                document.getElementById('sumEstAdicional').innerText = formatearMoneda(adicionalSum);
+                document.getElementById('sumEstExtraordinario').innerText = formatearMoneda(extraordinarioSum);
+
+                const ctxPieEst = document.getElementById('graficaPastelEstimaciones').getContext('2d');
+                if (miPieChartEst) miPieChartEst.destroy();
+
+                miPieChartEst = new Chart(ctxPieEst, {
+                    type: 'pie',
+                    data: {
+                        labels: ['Ordinario', 'Adicional', 'Extraordinario'],
+                        datasets: [{
+                            data: [ordinarioSum, adicionalSum, extraordinarioSum],
+                            backgroundColor: ['rgba(37, 99, 235, 0.8)', 'rgba(99, 102, 241, 0.8)', 'rgba(16, 185, 129, 0.8)'],
+                            borderColor: '#ffffff',
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 } } },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        let label = context.label || '';
+                                        let value = context.parsed || 0;
+                                        let percentage = totalEstSum > 0 ? ((value / totalEstSum) * 100).toFixed(2) : 0;
+                                        return `${label}: ${formatearMoneda(value)} (${percentage}%)`;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+
+                let acumuladoAnterior = 0;
+
+                estimacionesOrdenadas.forEach(e => {
+                    let idEst = String(e.IdEst || '').trim();
+                    let montoEst = mapaMontoEst[idEst] || 0;
+                    
+                    let acAnterior = acumuladoAnterior;
+                    let acumulado = redondear2(acAnterior + montoEst);
+                    acumuladoAnterior = acumulado;
+
+                    let tipoExacto = normalizarTipoEstimacion(e.tipoEst);
+                    if (filtroTipoEstimacionActivo !== 'TODAS' && tipoExacto !== filtroTipoEstimacionActivo) return;
+
+                    let amortizacion = redondear2(montoEst * 0.20);
+                    let subtotal = redondear2(montoEst - amortizacion);
+                    let iva = redondear2(subtotal * 0.16);
+                    let total = redondear2(subtotal + iva);
+                    let retencion = redondear2((montoEst + (montoEst * 0.16)) * 0.10);
+                    let importeLiquido = redondear2(total - retencion);
+                    let noventaPorc = redondear2(montoEst * 0.90);
+                    let diezPorc = redondear2(montoEst * 0.10);
+
+                    let status = String(e.status || '').trim();
+                    let claseStatus = '';
+                    let statusLower = status.toLowerCase();
+                    if (statusLower.includes('revisión') || statusLower.includes('revision')) claseStatus = 'text-red-600 font-bold';
+                    else if (statusLower.includes('facturado')) claseStatus = 'text-blue-600 font-bold';
+                    else if (statusLower.includes('pagado')) claseStatus = 'text-emerald-600 font-bold';
+
+                    datosEstimacionesFiltradasActuales.push({
+                        "N° Est": `Est. N° ${e.NEst || ''}`,
+                        "Acumulado anterior": acAnterior,
+                        "Acumulado": acumulado,
+                        "Monto": montoEst,
+                        "Amortizacion": amortizacion,
+                        "Subtotal": subtotal,
+                        "I.V.A.": iva,
+                        "Total": total,
+                        "Retención": retencion,
+                        "Importe líquido": importeLiquido,
+                        "90%": noventaPorc,
+                        "10%": diezPorc,
+                        "Periodo": `${formatearFechaCorta(e.De)} al ${formatearFechaCorta(e.A)}`,
+                        "Fecha": formatearFechaCorta(e.Fecha),
+                        "Tipo": e.tipoEst || '',
+                        "Estatus": e.status || ''
+                    });
+
+                    let trEst = document.createElement('tr');
+                    trEst.className = "hover:bg-blue-50 transition";
+                    trEst.innerHTML = `
+                        <td class="col-est-0 px-3 py-2 font-bold">Est. N° ${e.NEst || ''}</td>
+                        <td class="col-est-1 px-3 py-2 text-right">${formatearMoneda(acAnterior)}</td>
+                        <td class="col-est-2 px-3 py-2 text-right font-semibold text-slate-800">${formatearMoneda(acumulado)}</td>
+                        <td class="col-est-3 px-3 py-2 text-right font-bold text-blue-900">${formatearMoneda(montoEst)}</td>
+                        <td class="col-est-4 px-3 py-2 text-right">${formatearMoneda(amortizacion)}</td>
+                        <td class="col-est-5 px-3 py-2 text-right font-semibold">${formatearMoneda(subtotal)}</td>
+                        <td class="col-est-6 px-3 py-2 text-right">${formatearMoneda(iva)}</td>
+                        <td class="col-est-7 px-3 py-2 text-right font-bold text-slate-900">${formatearMoneda(total)}</td>
+                        <td class="col-est-8 px-3 py-2 text-right text-red-700">${formatearMoneda(retencion)}</td>
+                        <td class="col-est-9 px-3 py-2 text-right font-bold text-emerald-800">${formatearMoneda(importeLiquido)}</td>
+                        <td class="col-est-10 px-3 py-2 text-right">${formatearMoneda(noventaPorc)}</td>
+                        <td class="col-est-11 px-3 py-2 text-right">${formatearMoneda(diezPorc)}</td>
+                        <td class="col-est-12 px-3 py-2">${formatearFechaCorta(e.De)} al ${formatearFechaCorta(e.A)}</td>
+                        <td class="col-est-13 px-3 py-2">${formatearFechaCorta(e.Fecha)}</td>
+                        <td class="col-est-14 px-3 py-2">${e.tipoEst || ''}</td>
+                        <td class="col-est-15 px-3 py-2"><span class="${claseStatus}">${e.status || ''}</span></td>
+                    `;
+                    aplicarVisibilidadColumnasEstEnFila(trEst);
+                    tbodyEst.appendChild(trEst);
+                });
+                aplicarVisibilidadColumnasEstEnFila(document.getElementById('headEstimaciones'));
+            }
+        }
+
+        function renderizarSeccionMasMenos(mapaDiferencias) {
+            let contenedorTarjetas = document.getElementById('contenedorTarjetasMasmenos');
+            let tbodyMm = document.querySelector('#tablaMasmenos tbody');
+            let btnQuitarFiltro = document.getElementById('btnQuitarFiltroMasmenos');
+            let proyectoMasmenosSel = document.getElementById('filtroProyectoMasmenos').value;
+
+            if (!contenedorTarjetas || !tbodyMm) return;
+
+            contenedorTarjetas.innerHTML = '';
+            tbodyMm.innerHTML = '';
+            datosMasMenosFiltradosActuales = [];
+
+            let totalAprobadosSum = 0;
+            let mapaNAjustes = {};
+
+            let mapaSubpartidas = {};
+            if (globalData.subpartidas) {
+                globalData.subpartidas.forEach(s => { mapaSubpartidas[s.IDSub] = s; });
+            }
+
+            let mapaConceptosObj = {};
+            let mapaNCon = {};
+            if (globalData.conceptos) {
+                globalData.conceptos.forEach(c => {
+                    let idCon = String(c.IDcon || '').trim();
+                    if (idCon) {
+                        mapaNCon[idCon] = c.NCon || idCon;
+                        mapaConceptosObj[idCon] = c;
+                    }
+                });
+            }
+
+            let masmenosFiltrados = globalData.Masmenos || [];
+            if (proyectoMasmenosSel !== "") {
+                masmenosFiltrados = masmenosFiltrados.filter(m => {
+                    let idMasMenos = String(m['id+-']).trim();
+                    let tieneDetalleEnProyecto = (globalData.Det_Masmenos || []).some(det => {
+                        if (String(det['id+-']).trim() !== idMasMenos) return false;
+                        let cRef = mapaConceptosObj[String(det.IDcon || '').trim()];
+                        if (!cRef) return false;
+                        let subRef = mapaSubpartidas[cRef.IDSub];
+                        return subRef && String(subRef.Idproyecto || '') === proyectoMasmenosSel;
+                    });
+                    return tieneDetalleEnProyecto;
+                });
+            }
+
+            masmenosFiltrados.forEach(m => {
+                let idMasMenos = String(m['id+-']).trim();
+                let nAjuste = m['n+-'] || '';
+                let estatus = String(m['status+-'] || '').trim();
+                let dif = mapaDiferencias[idMasMenos] || 0;
+
+                mapaNAjustes[idMasMenos] = nAjuste;
+                if (estatus.toLowerCase() === 'aprobado') totalAprobadosSum = redondear2(totalAprobadosSum + dif);
+
+                let esActivo = (filtroAjusteMasmenosActivo === idMasMenos);
+                let bordeActivo = esActivo ? 'border-2 border-blue-600 bg-blue-50' : 'border border-gray-200 bg-white';
+
+                contenedorTarjetas.innerHTML += `
+                    <div onclick="filtrarAjusteMasmenos('${idMasMenos}')" class="${bordeActivo} p-4 rounded-lg shadow-sm cursor-pointer hover:shadow-md transition transform hover:-translate-y-0.5">
+                        <p class="text-xs text-gray-500 font-semibold">Ajuste N° ${nAjuste}</p>
+                        <p class="text-base font-bold ${dif >= 0 ? 'text-emerald-700' : 'text-red-600'}">${formatearMoneda(dif)}</p>
+                        <p class="text-[10px] text-gray-400 mt-1">Estatus: ${estatus}</p>
+                    </div>
+                `;
+            });
+
+            let esGeneralActivo = (filtroAjusteMasmenosActivo === 'TODOS');
+            let bordeGenActivo = esGeneralActivo && filtroAjusteMasmenosActivo !== 'TODOS' ? 'border border-gray-200 bg-white' : 'border-2 border-slate-800 bg-slate-900 text-white';
+
+            contenedorTarjetas.innerHTML += `
+                <div onclick="filtrarAjusteMasmenos('TODOS')" class="${bordeGenActivo} p-4 rounded-lg shadow-sm cursor-pointer hover:shadow-md transition transform hover:-translate-y-0.5 flex flex-col justify-between">
+                    <div>
+                        <p class="text-xs opacity-80 font-semibold">Suma Ajustes Aprobados 🔍</p>
+                        <p class="text-base font-bold">${formatearMoneda(totalAprobadosSum)}</p>
+                    </div>
+                    <p class="text-[10px] opacity-70 mt-1">Clic para ver todos</p>
+                </div>
+            `;
+
+            if (filtroAjusteMasmenosActivo !== 'TODOS') btnQuitarFiltro.classList.remove('hidden');
+            else btnQuitarFiltro.classList.add('hidden');
+
+            let mapaEstStatus = {};
+            if (globalData.Estimaciones) {
+                globalData.Estimaciones.forEach(e => {
+                    let idEst = String(e.IdEst || '').trim();
+                    let estatus = String(e.status || '').trim();
+                    if (idEst) mapaEstStatus[idEst] = estatus;
+                });
+            }
+
+            let mapaGenTotal = {};
+            if (globalData.Generadores) {
+                globalData.Generadores.forEach(g => {
+                    let idEstGen = String(g.IdEst || '').trim();
+                    let estatusEstimacion = mapaEstStatus[idEstGen] || '';
+                    if (estatusEstimacion.toLowerCase() === 'en revisión') return;
+
+                    let idCon = String(g.IDcon || '').trim();
+                    let paraEsta = parseFloat(String(g['para esta'] || 0).replace(/[^0-9.-]+/g, ""));
+                    if (idCon && !isNaN(paraEsta)) {
+                        mapaGenTotal[idCon] = redondear2((mapaGenTotal[idCon] || 0) + paraEsta);
+                    }
+                });
+            }
+
+            let saldoCantEstimadaDisponible = {};
+            for (let idCon in mapaConceptosObj) {
+                let c = mapaConceptosObj[idCon];
+                let tipoCon = String(c.tipo || '').trim().toUpperCase();
+                let cantOrd = redondear2(parseFloat(String(c.CantidadOrdCon || 0).replace(/[^0-9.-]+/g, "")) || 0);
+                let totalGen = redondear2(mapaGenTotal[idCon] || 0);
+
+                if (tipoCon === 'EXT') saldoCantEstimadaDisponible[idCon] = totalGen;
+                else saldoCantEstimadaDisponible[idCon] = redondear2(Math.max(0, totalGen - cantOrd));
+            }
+
+            let sumaTotalMontoEstimado = 0;
+            let sumaTotalFaltaEstimar = 0;
+            let sumaMontoEliminadoTotal = 0;
+
+            if (globalData.Det_Masmenos) {
+                globalData.Det_Masmenos.forEach(det => {
+                    let idMasMenos = String(det['id+-']).trim();
+                    let idCon = String(det.IDcon || '').trim();
+                    let conceptoRef = mapaConceptosObj[idCon];
+                    if (!conceptoRef) return;
+
+                    let subRef = mapaSubpartidas[conceptoRef.IDSub];
+                    if (proyectoMasmenosSel !== "" && subRef && String(subRef.Idproyecto || '') !== proyectoMasmenosSel) {
+                        return;
+                    }
+
+                    let pasaFiltroMaster = (filtroAjusteMasmenosActivo === 'TODOS' || idMasMenos === filtroAjusteMasmenosActivo);
+                    if (!pasaFiltroMaster) return;
+
+                    let nAjuste = mapaNAjustes[idMasMenos] || idMasMenos;
+                    let nConOficial = mapaNCon[idCon] || idCon;
+                    let pu = parseFloat(String(det['P.U.Con'] || '0').replace(/[^0-9.-]+/g, "")) || 0;
+                    let montoDet = redondear2(parseFloat(String(det['Monto+-'] || '0').replace(/[^0-9.-]+/g, "")) || 0);
+                    let cantAjuste = redondear2(parseFloat(String(det['cant_+-'] || '0').replace(/[^0-9.-]+/g, "")) || 0);
+                    
+                    let tipoCon = conceptoRef ? String(conceptoRef.tipo || '').trim().toUpperCase() : '';
+                    let cantOrd = conceptoRef ? redondear2(parseFloat(String(conceptoRef.CantidadOrdCon || '0').replace(/[^0-9.-]+/g, "")) || 0) : 0;
+                    let cantReal = redondear2(cantOrd + cantAjuste);
+
+                    let categoria = 'incremento';
+                    if (tipoCon === 'EXT') categoria = 'extraordinario';
+                    else if (cantReal === 0) categoria = 'eliminado';
+                    else if (cantAjuste < 0) categoria = 'decremento';
+
+                    let montoEstimadoAjuste = 0;
+                    let faltaPorEstimarAjuste = 0;
+
+                    if (categoria === 'incremento' || categoria === 'extraordinario') {
+                        let cantDisponible = saldoCantEstimadaDisponible[idCon] || 0;
+                        let cantAplicada = redondear2(Math.min(Math.max(0, cantAjuste), cantDisponible));
+                        saldoCantEstimadaDisponible[idCon] = redondear2(Math.max(0, cantDisponible - cantAplicada));
+
+                        montoEstimadoAjuste = redondear2(cantAplicada * pu);
+                        faltaPorEstimarAjuste = redondear2(Math.max(0, montoDet - montoEstimadoAjuste));
+                    }
+
+                    if (categoria === 'incremento' || categoria === 'extraordinario') {
+                        if (categoriasSeleccionadas[categoria]) {
+                            sumaTotalMontoEstimado = redondear2(sumaTotalMontoEstimado + montoEstimadoAjuste);
+                            sumaTotalFaltaEstimar = redondear2(sumaTotalFaltaEstimar + faltaPorEstimarAjuste);
+                        }
+                    }
+                    if (categoria === 'eliminado' || categoria === 'decremento') {
+                        if (categoriasSeleccionadas[categoria]) {
+                            sumaMontoEliminadoTotal = redondear2(sumaMontoEliminadoTotal + Math.abs(montoDet));
+                        }
+                    }
+
+                    let pasaFiltroCat = categoriasSeleccionadas[categoria] === true;
+
+                    if (pasaFiltroCat) {
+                        let masterObj = (globalData.Masmenos || []).find(m => String(m['id+-']).trim() === idMasMenos);
+                        let estatusMaster = masterObj ? masterObj['status+-'] : '';
+
+                        datosMasMenosFiltradosActuales.push({
+                            "N° Ajuste": `Ajuste N° ${nAjuste}`,
+                            "NCon": nConOficial,
+                            "Cantidad Ajuste": cantAjuste,
+                            "P.U.": pu,
+                            "Monto Total": montoDet,
+                            "Monto Estimado": (categoria === 'incremento' || categoria === 'extraordinario') ? montoEstimadoAjuste : 0,
+                            "Falta por Estimar": (categoria === 'incremento' || categoria === 'extraordinario') ? faltaPorEstimarAjuste : 0,
+                            "Categoría": categoria.charAt(0).toUpperCase() + categoria.slice(1),
+                            "Estatus": estatusMaster
+                        });
+
+                        let estiloFila = 'hover:bg-blue-50 transition';
+                        let badgeCat = '<span class="px-2 py-0.5 rounded text-xs font-semibold bg-blue-100 text-blue-800">Incremento</span>';
+
+                        if (categoria === 'extraordinario') badgeCat = '<span class="px-2 py-0.5 rounded text-xs font-semibold bg-orange-100 text-orange-800">Extraordinario</span>';
+                        else if (categoria === 'eliminado') {
+                            estiloFila = 'bg-black text-white hover:bg-gray-900 transition';
+                            badgeCat = '<span class="px-2 py-0.5 rounded text-xs font-semibold bg-gray-800 text-white border border-gray-600">Eliminado</span>';
+                        } else if (categoria === 'decremento') badgeCat = '<span class="px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-800">Decremento</span>';
+
+                        let colorMonto = categoria === 'eliminado' ? 'text-white font-bold' : (montoDet >= 0 ? 'text-emerald-700 font-bold' : 'text-red-600 font-bold');
+                        let aplicaEstimado = (categoria === 'incremento' || categoria === 'extraordinario');
+
+                        tbodyMm.innerHTML += `
+                            <tr class="${estiloFila}">
+                                <td class="px-3 py-2 font-bold">Ajuste N° ${nAjuste}</td>
+                                <td class="px-3 py-2 font-mono text-xs font-bold">${nConOficial}</td>
+                                <td class="px-3 py-2 text-right">${formatearNumero(cantAjuste)}</td>
+                                <td class="px-3 py-2 text-right">${formatearMoneda(pu)}</td>
+                                <td class="px-3 py-2 text-right ${colorMonto}">${formatearMoneda(montoDet)}</td>
+                                <td class="px-3 py-2 text-right font-semibold ${aplicaEstimado ? 'text-emerald-700' : 'text-gray-400'}">${aplicaEstimado ? formatearMoneda(montoEstimadoAjuste) : '-'}</td>
+                                <td class="px-3 py-2 text-right font-semibold ${aplicaEstimado ? 'text-blue-700' : 'text-gray-400'}">${aplicaEstimado ? formatearMoneda(faltaPorEstimarAjuste) : '-'}</td>
+                                <td class="px-3 py-2 text-center">${badgeCat}</td>
+                                <td class="px-3 py-2"><span class="text-xs px-2 py-0.5 rounded font-semibold border ${categoria === 'eliminado' ? 'border-gray-700 text-gray-300' : 'bg-blue-50 text-blue-800 border-blue-200'}">${estatusMaster}</span></td>
+                            </tr>
+                        `;
+                    }
+                });
+            }
+
+            document.getElementById('lblTotalMontoEstimadoMasmenos').innerText = formatearMoneda(sumaTotalMontoEstimado);
+            document.getElementById('lblTotalFaltaEstimarMasmenos').innerText = formatearMoneda(sumaTotalFaltaEstimar);
+            document.getElementById('lblTotalMontoEliminadoMasmenos').innerText = formatearMoneda(sumaMontoEliminadoTotal);
+        }
+
+        function toggleFiltroEliminadoTotal() {
+            categoriasSeleccionadas.incremento = false;
+            categoriasSeleccionadas.decremento = true;
+            categoriasSeleccionadas.eliminado = true;
+            categoriasSeleccionadas.extraordinario = false;
+            actualizarEstilosBotonesCategoria();
+            renderizarDashboard();
+        }
+
+        function renderizarAvanceConceptos() {
+            let tbodyAvance = document.querySelector('#tablaAvanceConceptos tbody');
+            if (!tbodyAvance) return;
+            tbodyAvance.innerHTML = '';
+            datosAvanceConceptosActuales = [];
+
+            if (!globalData.conceptos) return;
+
+            let proyectoSeleccionado = document.getElementById('filtroProyectoAvance').value;
+            let textoBusquedaExacta = document.getElementById('buscadorNConAvance').value.trim();
+            let mostrarTooltip = document.getElementById('chkTooltipAvance').checked;
+
+            let mapaSubpartidas = {};
+            if (globalData.subpartidas) {
+                globalData.subpartidas.forEach(s => { mapaSubpartidas[s.IDSub] = s; });
+            }
+
+            let mapaEstStatus = {};
+            if (globalData.Estimaciones) {
+                globalData.Estimaciones.forEach(e => {
+                    let idEst = String(e.IdEst || '').trim();
+                    let estatus = String(e.status || '').trim();
+                    if (idEst) mapaEstStatus[idEst] = estatus;
+                });
+            }
+
+            let mapaAdic = {};
+            let mapaExt = {};
+            if (globalData.Det_Masmenos) {
+                globalData.Det_Masmenos.forEach(det => {
+                    let idCon = String(det.IDcon || '').trim();
+                    let cantVal = parseFloat(String(det['cant_+-'] || 0).replace(/[^0-9.-]+/g, ""));
+                    if (idCon && !isNaN(cantVal)) {
+                        let conceptoRef = (globalData.conceptos || []).find(c => String(c.IDcon).trim() === idCon);
+                        let tipoConcepto = conceptoRef ? String(conceptoRef.tipo || '').trim().toUpperCase() : '';
+                        if (tipoConcepto === 'CAT') mapaAdic[idCon] = redondear2((mapaAdic[idCon] || 0) + cantVal);
+                        else mapaExt[idCon] = redondear2((mapaExt[idCon] || 0) + cantVal);
+                    }
+                });
+            }
+
+            let mapaGenOrd = {};
+            let mapaGenExt = {};
+            if (globalData.Generadores) {
+                globalData.Generadores.forEach(g => {
+                    let idEstGen = String(g.IdEst || '').trim();
+                    let estatusEstimacion = mapaEstStatus[idEstGen] || '';
+                    if (estatusEstimacion.toLowerCase() === 'en revisión') return;
+
+                    let idCon = String(g.IDcon || '').trim();
+                    let paraEsta = parseFloat(String(g['para esta'] || 0).replace(/[^0-9.-]+/g, ""));
+                    if (idCon && !isNaN(paraEsta)) {
+                        let conceptoRef = (globalData.conceptos || []).find(c => String(c.IDcon).trim() === idCon);
+                        let tipoConcepto = conceptoRef ? String(conceptoRef.tipo || '').trim().toUpperCase() : '';
+                        if (tipoConcepto === 'EXT') mapaGenExt[idCon] = redondear2((mapaGenExt[idCon] || 0) + paraEsta);
+                        else mapaGenOrd[idCon] = redondear2((mapaGenOrd[idCon] || 0) + paraEsta);
+                    }
+                });
+            }
+
+            globalData.conceptos.forEach(c => {
+                let idConcepto = String(c.IDcon || '').trim();
+                let nCon = String(c.NCon || '').trim();
+                let descripcion = c.Concepto || '';
+                
+                let subObj = mapaSubpartidas[c.IDSub] || {};
+                let proyIdCon = String(subObj.Idproyecto || '');
+                if (proyectoSeleccionado !== "" && proyIdCon !== proyectoSeleccionado) {
+                    return;
+                }
+
+                if (textoBusquedaExacta !== "" && nCon !== textoBusquedaExacta) {
+                    return;
+                }
+
+                let cantOrd = redondear2(parseFloat(String(c.CantidadOrdCon || 0).replace(/[^0-9.-]+/g, "")) || 0);
+                let cantAdic = redondear2(mapaAdic[idConcepto] || 0);
+                let cantExt = redondear2(mapaExt[idConcepto] || 0);
+                let cantReal = redondear2(cantOrd + cantAdic + cantExt);
+                let pu = parseFloat(String(c['P.U.Con'] || 0).replace(/[^0-9.-]+/g, "")) || 0;
+                let montoReal = redondear2(cantReal * pu);
+
+                let totalGeneradoresOrd = redondear2(mapaGenOrd[idConcepto] || 0);
+                let cantOrdEstim = 0;
+                let cantAdiEstim = 0;
+
+                if (cantAdic < 0) {
+                    cantOrdEstim = redondear2(Math.min(totalGeneradoresOrd, Math.max(0, cantReal)));
+                    cantAdiEstim = 0;
+                } else {
+                    cantOrdEstim = redondear2(Math.min(totalGeneradoresOrd, cantOrd));
+                    let remanenteGen = redondear2(Math.max(0, totalGeneradoresOrd - cantOrd));
+                    cantAdiEstim = redondear2(Math.min(remanenteGen, cantAdic));
+                }
+
+                let cantExtEstim = redondear2(mapaGenExt[idConcepto] || 0);
+                let cantTotalEstim = redondear2(cantOrdEstim + cantAdiEstim + cantExtEstim);
+                let montoTotalEstim = redondear2(cantTotalEstim * pu);
+
+                let cantTotalPorEstimar = redondear2(Math.max(0, cantReal - cantTotalEstim));
+                let montoTotalPorEstimar = redondear2(cantTotalPorEstimar * pu);
+
+                let porcentaje = 0;
+                if (cantReal > 0) {
+                    porcentaje = (cantTotalEstim / cantReal) * 100;
+                }
+
+                let claseColorFila = "hover:bg-blue-50 cursor-pointer transition";
+                if (cantReal === 0 && cantTotalEstim === 0) {
+                    claseColorFila = "bg-red-50 text-red-700 hover:bg-red-100 cursor-pointer transition";
+                } else if (cantReal > 0 && cantReal === cantTotalEstim) {
+                    claseColorFila = "bg-emerald-50 text-emerald-800 hover:bg-emerald-100 cursor-pointer transition";
+                } else if (cantReal > 0 && cantTotalEstim < cantReal) {
+                    claseColorFila = "bg-orange-50 text-orange-800 hover:bg-orange-100 cursor-pointer transition";
+                }
+
+                datosAvanceConceptosActuales.push({
+                    "NCon": nCon,
+                    "Descripción": descripcion,
+                    "% de avance": `${porcentaje.toFixed(2)}%`,
+                    "P.U.": pu,
+                    "Cant. Ord": cantOrd,
+                    "Cant. Adic": cantAdic,
+                    "Cant. Real": cantReal,
+                    "Monto Real": montoReal,
+                    "Cant. total_estim": cantTotalEstim,
+                    "Monto total_estim": montoTotalEstim,
+                    "Cant. total por estim": cantTotalPorEstimar,
+                    "Monto total por estim": montoTotalPorEstimar
+                });
+
+                let graficoSvg = generarGraficoCircularSVG(porcentaje);
+                let trAvance = document.createElement('tr');
+                trAvance.className = claseColorFila;
+                
+                trAvance.onclick = function() {
+                    mostrarDesgloseConceptoCompleto(idConcepto, nCon, descripcion, cantReal, montoReal, cantTotalEstim, montoTotalEstim, cantTotalPorEstimar, montoTotalPorEstimar);
+                };
+
+                if (mostrarTooltip) {
+                    trAvance.setAttribute('title', descripcion + " (Haz clic para ver desglose completo de estimaciones y ajustes)");
+                }
+
+                trAvance.innerHTML = `
+                    <td class="col-av-0 px-4 py-2 font-mono text-xs font-bold">${nCon}</td>
+                    <td class="col-av-1 px-4 py-2 text-center">${graficoSvg}</td>
+                    <td class="col-av-2 px-4 py-2 text-right">${formatearMoneda(pu)}</td>
+                    <td class="col-av-3 px-4 py-2 text-right">${formatearNumero(cantOrd)}</td>
+                    <td class="col-av-4 px-4 py-2 text-right">${formatearNumero(cantAdic)}</td>
+                    <td class="col-av-5 px-4 py-2 text-right font-bold">${formatearNumero(cantReal)}</td>
+                    <td class="col-av-6 px-4 py-2 text-right font-semibold">${formatearMoneda(montoReal)}</td>
+                    <td class="col-av-7 px-4 py-2 text-right font-bold">${formatearNumero(cantTotalEstim)}</td>
+                    <td class="col-av-8 px-4 py-2 text-right font-semibold">${formatearMoneda(montoTotalEstim)}</td>
+                    <td class="col-av-9 px-4 py-2 text-right font-semibold">${formatearNumero(cantTotalPorEstimar)}</td>
+                    <td class="col-av-10 px-4 py-2 text-right font-bold">${formatearMoneda(montoTotalPorEstimar)}</td>
+                `;
+
+                aplicarVisibilidadColumnasAvanceEnFila(trAvance);
+                tbodyAvance.appendChild(trAvance);
+            });
+            aplicarVisibilidadColumnasAvanceEnFila(document.getElementById('headAvanceConceptos'));
+        }
+
+        function mostrarDesgloseConceptoCompleto(idConcepto, nCon, descripcion, cantReal, montoReal, cantTotalEstim, montoTotalEstim, cantTotalPorEstimar, montoTotalPorEstimar) {
+            let panel = document.getElementById('panelDesgloseConcepto');
+            let titulo = document.getElementById('tituloDesgloseConcepto');
+            let contenedorEstimaciones = document.getElementById('contenedorEtiquetasEstimaciones');
+            let contenedorAjustes = document.getElementById('contenedorEtiquetasAjustes');
+            
+            panel.classList.remove('hidden');
+            titulo.innerHTML = `Desglose Completo para el Concepto <span class="text-blue-600 font-bold">NCon: ${nCon}</span> - <span class="font-normal text-gray-600">${descripcion}</span>`;
+            
+            contenedorEstimaciones.innerHTML = '';
+            contenedorAjustes.innerHTML = '';
+
+            let puConcepto = 0;
+            let conceptoRef = (globalData.conceptos || []).find(c => String(c.IDcon || '').trim() === String(idConcepto).trim());
+            if (conceptoRef) {
+                puConcepto = parseFloat(String(conceptoRef['P.U.Con'] || 0).replace(/[^0-9.-]+/g, "")) || 0;
+            }
+
+            let mapaNEst = {};
+            if (globalData.Estimaciones) {
+                globalData.Estimaciones.forEach(e => {
+                    let idEst = String(e.IdEst || '').trim();
+                    if (idEst) mapaNEst[idEst] = e.NEst || idEst;
+                });
+            }
+
+            let datosPorNEst = {}; 
+            if (globalData.Generadores) {
+                globalData.Generadores.forEach(g => {
+                    let idConGen = String(g.IDcon || '').trim();
+                    if (idConGen === String(idConcepto).trim()) {
+                        let idEstGen = String(g.IdEst || '').trim();
+                        let nEstNum = mapaNEst[idEstGen] || 'S/N';
+                        let paraEsta = parseFloat(String(g['para esta'] || 0).replace(/[^0-9.-]+/g, ""));
+                        let montoParcial = redondear2(paraEsta * puConcepto);
+
+                        if (!isNaN(paraEsta) && paraEsta > 0) {
+                            if (!datosPorNEst[nEstNum]) datosPorNEst[nEstNum] = { cant: 0, monto: 0 };
+                            datosPorNEst[nEstNum].cant = redondear2(datosPorNEst[nEstNum].cant + paraEsta);
+                            datosPorNEst[nEstNum].monto = redondear2(datosPorNEst[nEstNum].monto + montoParcial);
+                        }
+                    }
+                });
+            }
+
+            let llavesNEst = Object.keys(datosPorNEst).sort((a,b) => Number(a) - Number(b));
+            
+            if (llavesNEst.length === 0) {
+                contenedorEstimaciones.innerHTML += `<span class="bg-white border border-gray-300 text-gray-500 px-3 py-1.5 rounded text-xs">⚠️ Sin estimaciones registradas para este concepto.</span>`;
+            } else {
+                llavesNEst.forEach(nEst => {
+                    let item = datosPorNEst[nEst];
+                    contenedorEstimaciones.innerHTML += `
+                        <div class="bg-white border border-blue-300 shadow-sm rounded px-3 py-1.5 flex items-center gap-2">
+                            <span class="font-bold text-blue-900 text-xs">Est. N° ${nEst}:</span>
+                            <span class="text-gray-700 font-medium text-xs">Cant: ${formatearNumero(item.cant)}</span>
+                            <span class="text-emerald-700 font-semibold text-xs">| Monto: ${formatearMoneda(item.monto)}</span>
+                        </div>
+                    `;
+                });
+            }
+
+            contenedorEstimaciones.innerHTML += `
+                <div class="bg-emerald-600 text-white shadow-sm rounded px-3 py-1.5 flex items-center gap-2 ml-auto">
+                    <span class="font-bold text-xs">Total Estimado:</span>
+                    <span class="text-xs">Cant: ${formatearNumero(cantTotalEstim)}</span>
+                    <span class="font-bold text-xs">| Monto: ${formatearMoneda(montoTotalEstim)}</span>
+                </div>
+                <div class="bg-amber-600 text-white shadow-sm rounded px-3 py-1.5 flex items-center gap-2">
+                    <span class="font-bold text-xs">Faltante por Estimar:</span>
+                    <span class="text-xs">Cant: ${formatearNumero(cantTotalPorEstimar)}</span>
+                    <span class="font-bold text-xs">| Monto: ${formatearMoneda(montoTotalPorEstimar)}</span>
+                </div>
+            `;
+
+            let mapaNAjustes = {};
+            if (globalData.Masmenos) {
+                globalData.Masmenos.forEach(m => {
+                    let idMasMenos = String(m['id+-']).trim();
+                    mapaNAjustes[idMasMenos] = m['n+-'] || idMasMenos;
+                });
+            }
+
+            let ajustesDelConcepto = [];
+            if (globalData.Det_Masmenos) {
+                globalData.Det_Masmenos.forEach(det => {
+                    let idConDet = String(det.IDcon || '').trim();
+                    if (idConDet === String(idConcepto).trim()) {
+                        let idMasMenos = String(det['id+-'] || '').trim();
+                        let nAjusteNum = mapaNAjustes[idMasMenos] || idMasMenos;
+                        let cantAjuste = redondear2(parseFloat(String(det['cant_+-'] || 0).replace(/[^0-9.-]+/g, "")) || 0);
+                        let montoAjuste = redondear2(parseFloat(String(det['Monto+-'] || 0).replace(/[^0-9.-]+/g, "")) || 0);
+                        
+                        ajustesDelConcepto.push({
+                            nAjuste: nAjusteNum,
+                            cant: cantAjuste,
+                            monto: montoAjuste
+                        });
+                    }
+                });
+            }
+
+            if (ajustesDelConcepto.length === 0) {
+                contenedorAjustes.innerHTML += `<span class="bg-white border border-gray-300 text-gray-500 px-3 py-1.5 rounded text-xs">⚠️ Sin ajustes registrados para este concepto.</span>`;
+            } else {
+                ajustesDelConcepto.forEach(aj => {
+                    let colorMontoAjuste = aj.monto >= 0 ? 'text-emerald-700' : 'text-red-600';
+                    contenedorAjustes.innerHTML += `
+                        <div class="bg-white border border-indigo-300 shadow-sm rounded px-3 py-1.5 flex items-center gap-2">
+                            <span class="font-bold text-indigo-900 text-xs">Ajuste N° ${aj.nAjuste}:</span>
+                            <span class="text-gray-700 font-medium text-xs">Cant: ${formatearNumero(aj.cant)}</span>
+                            <span class="${colorMontoAjuste} font-semibold text-xs">| Monto: ${formatearMoneda(aj.monto)}</span>
+                        </div>
+                    `;
+                });
+            }
+        }
+
+        function cerrarPanelDesglose() {
+            document.getElementById('panelDesgloseConcepto').classList.add('hidden');
+        }
+
+        function construirPanelColumnasAvance() {
+            let contenedor = document.getElementById('listaCheckColumnsAvance');
+            contenedor.innerHTML = '';
+            nombresColumnasAvance.forEach((nombre, idx) => {
+                let checked = columnasVisiblesAvance[idx] ? 'checked' : '';
+                contenedor.innerHTML += `<label class="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
+                    <input type="checkbox" ${checked} onchange="cambiarVisibilidadColumnaAvance(${idx}, this.checked)" class="rounded text-blue-600">
+                    <span class="text-gray-700">${nombre}</span>
+                </label>`;
+            });
+        }
+
+        function togglePanelColumnasAvance() {
+            document.getElementById('panelColumnasAvance').classList.toggle('hidden');
+        }
+
+        function cambiarVisibilidadColumnaAvance(index, estatus) {
+            columnasVisiblesAvance[index] = estatus;
+            renderizarAvanceConceptos();
+        }
+
+        function toggleTodasColumnasAvance(estatus) {
+            columnasVisiblesAvance.fill(estatus);
+            construirPanelColumnasAvance();
+            renderizarAvanceConceptos();
+        }
+
+        function aplicarVisibilidadColumnasAvanceEnFila(filaElemento) {
+            columnasVisiblesAvance.forEach((visible, idx) => {
+                let celdas = filaElemento.querySelectorAll(`.col-av-${idx}`);
+                celdas.forEach(celda => {
+                    if (visible) celda.classList.remove('hidden');
+                    else celda.classList.add('hidden');
+                });
+            });
+        }
+
+        function exportarAvanceConceptosExcel() {
+            if (datosAvanceConceptosActuales.length === 0) {
+                alert('No hay datos de avance para exportar.');
+                return;
+            }
+            let wb = XLSX.utils.book_new();
+            let ws = XLSX.utils.json_to_sheet(datosAvanceConceptosActuales);
+            XLSX.utils.book_append_sheet(wb, ws, "Avance_Conceptos");
+            XLSX.writeFile(wb, `Reporte_Avance_Conceptos.xlsx`);
+        }
+
+        function toggleCatFiltro(cat) {
+            if (cat === 'todos') {
+                let todasActivas = categoriasSeleccionadas.incremento && categoriasSeleccionadas.decremento && categoriasSeleccionadas.eliminado && categoriasSeleccionadas.extraordinario;
+                let nuevoEstado = !todasActivas;
+                categoriasSeleccionadas.incremento = nuevoEstado;
+                categoriasSeleccionadas.decremento = nuevoEstado;
+                categoriasSeleccionadas.eliminado = nuevoEstado;
+                categoriasSeleccionadas.extraordinario = nuevoEstado;
+            } else {
+                categoriasSeleccionadas[cat] = !categoriasSeleccionadas[cat];
+            }
+            actualizarEstilosBotonesCategoria();
+            renderizarDashboard();
+        }
+
+        function actualizarEstilosBotonesCategoria() {
+            let todasActivas = categoriasSeleccionadas.incremento && categoriasSeleccionadas.decremento && categoriasSeleccionadas.eliminado && categoriasSeleccionadas.extraordinario;
+            let btnTodos = document.getElementById('btnCatTodos');
+            btnTodos.className = todasActivas ? "px-3 py-1.5 rounded font-semibold bg-slate-900 text-white transition shadow" : "px-3 py-1.5 rounded font-semibold bg-gray-200 text-gray-700 hover:bg-gray-300 transition";
+            btnTodos.innerText = todasActivas ? "✓ Todos" : "Todos";
+
+            const cats = ['incremento', 'decremento', 'eliminado', 'extraordinario'];
+            cats.forEach(c => {
+                let btn = document.getElementById(`btnCat${c.charAt(0).toUpperCase() + c.slice(1)}`);
+                if (btn) {
+                    if (categoriasSeleccionadas[c]) {
+                        if (c === 'incremento') btn.className = "px-3 py-1.5 rounded font-semibold bg-blue-600 text-white shadow transition";
+                        if (c === 'decremento') btn.className = "px-3 py-1.5 rounded font-semibold bg-red-600 text-white shadow transition";
+                        if (c === 'eliminado') btn.className = "px-3 py-1.5 rounded font-semibold bg-gray-900 text-white shadow transition";
+                        if (c === 'extraordinario') btn.className = "px-3 py-1.5 rounded font-semibold bg-orange-600 text-white shadow transition";
+                    } else {
+                        if (c === 'incremento') btn.className = "px-3 py-1.5 rounded font-semibold bg-blue-100 text-blue-800 hover:bg-blue-200 transition opacity-50";
+                        if (c === 'decremento') btn.className = "px-3 py-1.5 rounded font-semibold bg-red-100 text-red-800 hover:bg-red-200 transition opacity-50";
+                        if (c === 'eliminado') btn.className = "px-3 py-1.5 rounded font-semibold bg-black text-white hover:bg-gray-800 transition opacity-50";
+                        if (c === 'extraordinario') btn.className = "px-3 py-1.5 rounded font-semibold bg-orange-100 text-orange-800 hover:bg-orange-200 transition opacity-50";
+                    }
+                }
+            });
+        }
+
+        function exportarMasMenosFiltradoExcel() {
+            if (datosMasMenosFiltradosActuales.length === 0) {
+                alert('No hay datos en la tabla para exportar con los filtros actuales.');
+                return;
+            }
+            let wb = XLSX.utils.book_new();
+            let ws = XLSX.utils.json_to_sheet(datosMasMenosFiltradosActuales);
+            XLSX.utils.book_append_sheet(wb, ws, "Ajustes_Filtrados");
+            XLSX.writeFile(wb, `Reporte_Ajustes_Filtrados.xlsx`);
+        }
+
+        function exportarMasMenosFiltradoPDF() { window.print(); }
+
+        function exportarConceptosFiltradosExcel() {
+            if (datosConceptosFiltradosActuales.length === 0) {
+                alert('No hay datos de conceptos para exportar con los filtros actuales.');
+                return;
+            }
+            let wb = XLSX.utils.book_new();
+            let ws = XLSX.utils.json_to_sheet(datosConceptosFiltradosActuales);
+            XLSX.utils.book_append_sheet(wb, ws, "Conceptos_Filtrados");
+            XLSX.writeFile(wb, `Reporte_Conceptos_Filtrados.xlsx`);
+        }
+
+        function exportarEstimacionesFiltradasExcel() {
+            if (datosEstimacionesFiltradasActuales.length === 0) {
+                alert('No hay datos de estimaciones para exportar con los filtros actuales.');
+                return;
+            }
+            let wb = XLSX.utils.book_new();
+            let ws = XLSX.utils.json_to_sheet(datosEstimacionesFiltradasActuales);
+            XLSX.utils.book_append_sheet(wb, ws, "Estimaciones_Filtradas");
+            XLSX.writeFile(wb, `Reporte_Estimaciones_Filtradas.xlsx`);
+        }
+
+        function filtrarAjusteMasmenos(idAjuste) {
+            filtroAjusteMasmenosActivo = idAjuste;
+            renderizarDashboard();
+        }
+
+        function filtrarEstimacionesPorTipo(tipo) {
+            filtroTipoEstimacionActivo = tipo;
+            let indicador = document.getElementById('indicadorFiltroEstActivo');
+            let nombreSpan = document.getElementById('nombreFiltroEstActivo');
+            
+            if (tipo === 'TODAS') indicador.classList.add('hidden');
+            else {
+                indicador.classList.remove('hidden');
+                nombreSpan.innerText = tipo;
+            }
+            renderizarDashboard();
+        }
+
+        function construirPanelColumnas() {
+            let contenedor = document.getElementById('listaCheckColumns');
+            contenedor.innerHTML = '';
+            nombresColumnas.forEach((nombre, idx) => {
+                let checked = columnasVisibles[idx] ? 'checked' : '';
+                contenedor.innerHTML += `<label class="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
+                    <input type="checkbox" ${checked} onchange="cambiarVisibilidadColumna(${idx}, this.checked)" class="rounded text-blue-600">
+                    <span class="text-gray-700">${nombre}</span>
+                </label>`;
+            });
+        }
+
+        function togglePanelColumnas() { document.getElementById('panelColumnas').classList.toggle('hidden'); }
+        function cambiarVisibilidadColumna(index, estatus) { columnasVisibles[index] = estatus; filtrarConceptos(); }
+        function toggleTodasColumnasConceptos(estatus) { columnasVisibles.fill(estatus); construirPanelColumnas(); filtrarConceptos(); }
+
+        function aplicarVisibilidadColumnasEnFila(filaElemento) {
+            columnasVisibles.forEach((visible, idx) => {
+                let celdas = filaElemento.querySelectorAll(`.col-${idx}`);
+                celdas.forEach(celda => {
+                    if (visible) celda.classList.remove('hidden');
+                    else celda.classList.add('hidden');
+                });
+            });
+        }
+
+        function construirPanelColumnasEst() {
+            let contenedor = document.getElementById('listaCheckColumnsEst');
+            contenedor.innerHTML = '';
+            nombresColumnasEst.forEach((nombre, idx) => {
+                let checked = columnasVisiblesEst[idx] ? 'checked' : '';
+                contenedor.innerHTML += `<label class="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
+                    <input type="checkbox" ${checked} onchange="cambiarVisibilidadColumnaEst(${idx}, this.checked)" class="rounded text-blue-600">
+                    <span class="text-gray-700">${nombre}</span>
+                </label>`;
+            });
+        }
+
+        function togglePanelColumnasEst() { document.getElementById('panelColumnasEst').classList.toggle('hidden'); }
+        function cambiarVisibilidadColumnaEst(index, estatus) { columnasVisiblesEst[index] = estatus; renderizarDashboard(); }
+        function toggleTodasColumnasEst(estatus) { columnasVisiblesEst.fill(estatus); construirPanelColumnasEst(); renderizarDashboard(); }
+
+        function aplicarVisibilidadColumnasEstEnFila(filaElemento) {
+            columnasVisiblesEst.forEach((visible, idx) => {
+                let celdas = filaElemento.querySelectorAll(`.col-est-${idx}`);
+                celdas.forEach(celda => {
+                    if (visible) celda.classList.remove('hidden');
+                    else celda.classList.add('hidden');
+                });
+            });
+        }
+
+        function inicializarFiltrosCascada() {
+            let selProy = document.getElementById('filtroProyecto');
+            let selProyAvance = document.getElementById('filtroProyectoAvance');
+            let selProyEst = document.getElementById('filtroProyectoEst');
+            let selProyMasmenos = document.getElementById('filtroProyectoMasmenos');
+            
+            selProy.innerHTML = '<option value="">1. Todos los Proyectos</option>';
+            selProyAvance.innerHTML = '<option value="">📁 Todos los Proyectos</option>';
+            selProyEst.innerHTML = '<option value="">📁 Todos los Proyectos</option>';
+            selProyMasmenos.innerHTML = '<option value="">📁 Todos los Proyectos</option>';
+
+            if (globalData.Proyecto) {
+                globalData.Proyecto.forEach(p => {
+                    selProy.innerHTML += `<option value="${p.Idproyecto}">${p.NombreP}</option>`;
+                    selProyAvance.innerHTML += `<option value="${p.Idproyecto}">${p.NombreP}</option>`;
+                    selProyEst.innerHTML += `<option value="${p.Idproyecto}">${p.NombreP}</option>`;
+                    selProyMasmenos.innerHTML += `<option value="${p.Idproyecto}">${p.NombreP}</option>`;
+                });
+            }
+            actualizarPartidasYSubpartidasOptions();
+        }
+
+        function onProyectoChange() {
+            filtroTarjetaActivo = null;
+            let selProy = document.getElementById('filtroProyecto');
+            let selProyAvance = document.getElementById('filtroProyectoAvance');
+            let selProyEst = document.getElementById('filtroProyectoEst');
+            let selProyMasmenos = document.getElementById('filtroProyectoMasmenos');
+
+            selProyAvance.value = selProy.value;
+            selProyEst.value = selProy.value;
+            selProyMasmenos.value = selProy.value;
+
+            let nombreProy = selProy.options[selProy.selectedIndex].text;
+            if (selProy.value === "") {
+                if (globalData.Proyecto && globalData.Proyecto[0]) document.getElementById('lblProyectoHeader').innerText = globalData.Proyecto[0].NombreP;
+            } else document.getElementById('lblProyectoHeader').innerText = nombreProy;
+
+            actualizarPartidasYSubpartidasOptions();
+            filtrarConceptos();
+            renderizarAvanceConceptos();
+            renderizarDashboard();
+        }
+
+        function sincronizarProyectoDesdeAvance() {
+            let selProyAvance = document.getElementById('filtroProyectoAvance');
+            let selProy = document.getElementById('filtroProyecto');
+            selProy.value = selProyAvance.value;
+            onProyectoChange();
+        }
+
+        function onPartidaChange() {
+            filtroTarjetaActivo = null;
+            actualizarSubpartidasOptions();
+            filtrarConceptos();
+        }
+
+        function actualizarPartidasYSubpartidasOptions() {
+            let idProySel = document.getElementById('filtroProyecto').value;
+            let selPart = document.getElementById('filtroPartida');
+            selPart.innerHTML = '<option value="">2. Todas las Partidas</option>';
+
+            let partidasValidas = globalData.Partidas || [];
+            if (idProySel !== "") partidasValidas = partidasValidas.filter(p => String(p.Idproyecto || '') === idProySel);
+            partidasValidas.forEach(p => {
+                selPart.innerHTML += `<option value="${p.IDpart}">${p.Partida}</option>`;
+            });
+            actualizarSubpartidasOptions();
+        }
+
+        function actualizarSubpartidasOptions() {
+            let idProySel = document.getElementById('filtroProyecto').value;
+            let idPartSel = document.getElementById('filtroPartida').value;
+            let selSub = document.getElementById('filtroSubpartida');
+            selSub.innerHTML = '<option value="">3. Todas las Subpartidas</option>';
+
+            let subsValidas = globalData.subpartidas || [];
+            if (idProySel !== "") subsValidas = subsValidas.filter(s => String(s.Idproyecto || '') === idProySel);
+            if (idPartSel !== "") subsValidas = subsValidas.filter(s => String(s.IDpart || '') === idPartSel);
+            subsValidas.forEach(s => {
+                selSub.innerHTML += `<option value="${s.IDSub}">${s.Subpartida}</option>`;
+            });
+        }
+
+        function limpiarFiltros() {
+            document.getElementById('filtroProyecto').value = "";
+            document.getElementById('filtroProyectoAvance').value = "";
+            document.getElementById('filtroProyectoEst').value = "";
+            document.getElementById('filtroProyectoMasmenos').value = "";
+            document.getElementById('filtroPartida').value = "";
+            document.getElementById('filtroSubpartida').value = "";
+            document.getElementById('filtroNCon').value = "";
+            document.getElementById('filtroTipo').value = "";
+            filtroTarjetaActivo = null;
+            if (globalData.Proyecto && globalData.Proyecto[0]) document.getElementById('lblProyectoHeader').innerText = globalData.Proyecto[0].NombreP;
+            actualizarPartidasYSubpartidasOptions();
+            filtrarConceptos();
+            renderizarAvanceConceptos();
+            renderizarDashboard();
+        }
+
+        function filtrarPorTarjeta(tipo) {
+            filtroTarjetaActivo = tipo;
+            let indicador = document.getElementById('indicadorFiltroActivo');
+            let nombreSpan = document.getElementById('nombreFiltroActivo');
+            indicador.classList.remove('hidden');
+            nombreSpan.innerText = tipo === 'estimado' ? 'Monto Estimado (> $0)' : 'Monto Faltante (> $0)';
+            filtrarConceptos();
+        }
+
+        function limpiarFiltroTarjeta() {
+            filtroTarjetaActivo = null;
+            document.getElementById('indicadorFiltroActivo').classList.add('hidden');
+            filtrarConceptos();
+        }
+
+        function filtrarConceptos() {
+            let proySel = document.getElementById('filtroProyecto').value;
+            let partSel = document.getElementById('filtroPartida').value;
+            let subSel = document.getElementById('filtroSubpartida').value;
+            let textoNCon = document.getElementById('filtroNCon').value.toLowerCase().trim();
+            let tipoSel = document.getElementById('filtroTipo').value;
+
+            if (!globalData.conceptos) return;
+            datosConceptosFiltradosActuales = [];
+
+            let mapaSubpartidas = {};
+            if (globalData.subpartidas) {
+                globalData.subpartidas.forEach(s => { mapaSubpartidas[s.IDSub] = s; });
+            }
+
+            let mapaEstStatus = {};
+            if (globalData.Estimaciones) {
+                globalData.Estimaciones.forEach(e => {
+                    let idEst = String(e.IdEst || '').trim();
+                    let estatus = String(e.status || '').trim();
+                    if (idEst) mapaEstStatus[idEst] = estatus;
+                });
+            }
+
+            let mapaAdic = {};
+            let mapaExt = {};
+            if (globalData.Det_Masmenos) {
+                globalData.Det_Masmenos.forEach(det => {
+                    let idCon = String(det.IDcon || '').trim();
+                    let cantVal = parseFloat(String(det['cant_+-'] || 0).replace(/[^0-9.-]+/g, ""));
+                    if (idCon && !isNaN(cantVal)) {
+                        let conceptoRef = (globalData.conceptos || []).find(c => String(c.IDcon).trim() === idCon);
+                        let tipoConcepto = conceptoRef ? String(conceptoRef.tipo || '').trim().toUpperCase() : '';
+                        if (tipoConcepto === 'CAT') mapaAdic[idCon] = redondear2((mapaAdic[idCon] || 0) + cantVal);
+                        else mapaExt[idCon] = redondear2((mapaExt[idCon] || 0) + cantVal);
+                    }
+                });
+            }
+
+            let mapaGenOrd = {};
+            let mapaGenExt = {};
+            if (globalData.Generadores) {
+                globalData.Generadores.forEach(g => {
+                    let idEstGen = String(g.IdEst || '').trim();
+                    let estatusEstimacion = mapaEstStatus[idEstGen] || '';
+                    if (estatusEstimacion.toLowerCase() === 'en revisión') return;
+
+                    let idCon = String(g.IDcon || '').trim();
+                    let paraEsta = parseFloat(String(g['para esta'] || 0).replace(/[^0-9.-]+/g, ""));
+                    if (idCon && !isNaN(paraEsta)) {
+                        let conceptoRef = (globalData.conceptos || []).find(c => String(c.IDcon).trim() === idCon);
+                        let tipoConcepto = conceptoRef ? String(conceptoRef.tipo || '').trim().toUpperCase() : '';
+                        if (tipoConcepto === 'EXT') mapaGenExt[idCon] = redondear2((mapaGenExt[idCon] || 0) + paraEsta);
+                        else mapaGenOrd[idCon] = redondear2((mapaGenOrd[idCon] || 0) + paraEsta);
+                    }
+                });
+            }
+
+            let filtrados = globalData.conceptos.filter(c => {
+                let subObj = mapaSubpartidas[c.IDSub] || {};
+                let proyId = String(subObj.Idproyecto || '');
+                let partId = String(subObj.IDpart || '');
+                let subId = String(c.IDSub || '');
+                let tipoCon = String(c.tipo || '').trim().toUpperCase();
+                let nCon = String(c.NCon || '').toLowerCase().trim();
+
+                if (proySel !== "" && proyId !== proySel) return false;
+                if (partSel !== "" && partId !== partSel) return false;
+                if (subSel !== "" && subId !== subSel) return false;
+                if (tipoSel !== "" && tipoCon !== tipoSel) return false;
+                if (textoNCon !== "" && nCon !== textoNCon) return false;
+
+                if (filtroTarjetaActivo !== null) {
+                    let idConcepto = String(c.IDcon || '').trim();
+                    let cantOrd = redondear2(parseFloat(String(c.CantidadOrdCon || 0).replace(/[^0-9.-]+/g, "")) || 0);
+                    let cantAdic = redondear2(mapaAdic[idConcepto] || 0);
+                    let cantExt = redondear2(mapaExt[idConcepto] || 0);
+                    let cantReal = redondear2(cantOrd + cantAdic + cantExt);
+                    let pu = parseFloat(String(c['P.U.Con'] || '0').replace(/[^0-9.-]+/g, "")) || 0;
+                    
+                    let totalGeneradoresOrd = redondear2(mapaGenOrd[idConcepto] || 0);
+                    let cantOrdEstim = 0;
+                    let cantAdiEstim = 0;
+
+                    if (cantAdic < 0) {
+                        cantOrdEstim = redondear2(Math.min(totalGeneradoresOrd, Math.max(0, cantReal)));
+                        cantAdiEstim = 0;
+                    } else {
+                        cantOrdEstim = redondear2(Math.min(totalGeneradoresOrd, cantOrd));
+                        let remanenteGen = redondear2(Math.max(0, totalGeneradoresOrd - cantOrd));
+                        cantAdiEstim = redondear2(Math.min(remanenteGen, cantAdic));
+                    }
+
+                    let cantExtEstim = redondear2(mapaGenExt[idConcepto] || 0);
+                    let cantTotalEstim = redondear2(cantOrdEstim + cantAdiEstim + cantExtEstim);
+                    let montoTotalEstim = redondear2(cantTotalEstim * pu);
+
+                    let montoTotal = redondear2(cantReal * pu);
+                    let montoFaltante = redondear2(Math.max(0, montoTotal - montoTotalEstim));
+
+                    if (filtroTarjetaActivo === 'estimado' && montoTotalEstim <= 0) return false;
+                    if (filtroTarjetaActivo === 'faltante' && montoFaltante <= 0) return false;
+                }
+                return true;
+            });
+
+            gestionResumenSeleccion(partSel, subSel, filtrados, mapaEstStatus, mapaAdic, mapaExt, mapaGenOrd, mapaGenExt);
+            renderizarTablaConceptos(filtrados, mapaEstStatus, mapaAdic, mapaExt, mapaGenOrd, mapaGenExt);
+        }
+
+        function gestionResumenSeleccion(partSel, subSel, filtrados, mapaEstStatus, mapaAdic, mapaExt, mapaGenOrd, mapaGenExt) {
+            let contenedorResumen = document.getElementById('contenedorResumenFiltro');
+            if (partSel === "" && subSel === "") {
+                contenedorResumen.classList.add('hidden');
+                if (miPieChart) { miPieChart.destroy(); miPieChart = null; }
+                return;
+            }
+
+            contenedorResumen.classList.remove('hidden');
+            let tituloTexto = "Resumen de Selección";
+            if (subSel !== "" && globalData.subpartidas) {
+                let subObj = globalData.subpartidas.find(s => String(s.IDSub) === String(subSel));
+                if (subObj) tituloTexto = `Resumen Subpartida: ${subObj.Subpartida}`;
+            } else if (partSel !== "" && globalData.Partidas) {
+                let partObj = globalData.Partidas.find(p => String(p.IDpart) === String(partSel));
+                if (partObj) tituloTexto = `Resumen Partida: ${partObj.Partida}`;
+            }
+            document.getElementById('tituloResumenFiltro').innerText = tituloTexto;
+
+            let conceptosBaseParaResumen = globalData.conceptos.filter(c => {
+                let subObj = (globalData.subpartidas || []).find(s => String(s.IDSub) === String(c.IDSub)) || {};
+                let proySel = document.getElementById('filtroProyecto').value;
+                let partSel = document.getElementById('filtroPartida').value;
+                let subSel = document.getElementById('filtroSubpartida').value;
+
+                if (proySel !== "" && String(subObj.Idproyecto || '') !== proySel) return false;
+                if (partSel !== "" && String(subObj.IDpart || '') !== partSel) return false;
+                if (subSel !== "" && String(c.IDSub || '') !== subSel) return false;
+                return true;
+            });
+
+            let sumMontoTotal = 0;
+            let sumMontoEstimado = 0;
+
+            conceptosBaseParaResumen.forEach(c => {
+                let idConcepto = String(c.IDcon || '').trim();
+                let cantOrd = redondear2(parseFloat(String(c.CantidadOrdCon || 0).replace(/[^0-9.-]+/g, "")) || 0);
+                let cantAdic = redondear2(mapaAdic[idConcepto] || 0);
+                let cantExt = redondear2(mapaExt[idConcepto] || 0);
+                let cantReal = redondear2(cantOrd + cantAdic + cantExt);
+                let pu = parseFloat(String(c['P.U.Con'] || '0').replace(/[^0-9.-]+/g, "")) || 0;
+                let montoTotal = redondear2(cantReal * pu);
+
+                let totalGeneradoresOrd = redondear2(mapaGenOrd[idConcepto] || 0);
+                let cantOrdEstim = 0;
+                let cantAdiEstim = 0;
+
+                if (cantAdic < 0) {
+                    cantOrdEstim = redondear2(Math.min(totalGeneradoresOrd, Math.max(0, cantReal)));
+                    cantAdiEstim = 0;
+                } else {
+                    cantOrdEstim = redondear2(Math.min(totalGeneradoresOrd, cantOrd));
+                    let remanenteGen = redondear2(Math.max(0, totalGeneradoresOrd - cantOrd));
+                    cantAdiEstim = redondear2(Math.min(remanenteGen, cantAdic));
+                }
+
+                let cantExtEstim = redondear2(mapaGenExt[idConcepto] || 0);
+                let cantTotalEstim = redondear2(cantOrdEstim + cantAdiEstim + cantExtEstim);
+                let montoTotalEstim = redondear2(cantTotalEstim * pu);
+
+                sumMontoTotal = redondear2(sumMontoTotal + montoTotal);
+                sumMontoEstimado = redondear2(sumMontoEstimado + montoTotalEstim);
+            });
+
+            let sumMontoFaltante = redondear2(Math.max(0, sumMontoTotal - sumMontoEstimado));
+
+            document.getElementById('sumMontoTotal').innerText = formatearMoneda(sumMontoTotal);
+            document.getElementById('sumMontoEstimado').innerText = formatearMoneda(sumMontoEstimado);
+            document.getElementById('sumMontoFaltante').innerText = formatearMoneda(sumMontoFaltante);
+
+            const ctxPie = document.getElementById('graficaPastelFiltro').getContext('2d');
+            if (miPieChart) miPieChart.destroy();
+
+            miPieChart = new Chart(ctxPie, {
+                type: 'pie',
+                data: {
+                    labels: ['Monto Estimado', 'Monto Faltante'],
+                    datasets: [{
+                        data: [sumMontoEstimado, sumMontoFaltante],
+                        backgroundColor: ['rgba(16, 185, 129, 0.8)', 'rgba(37, 99, 235, 0.8)'],
+                        borderColor: '#ffffff',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 } } } }
+                }
+            });
+        }
+
+        function renderizarTablaConceptos(listaConceptos, mapaEstStatus, mapaAdic, mapaExt, mapaGenOrd, mapaGenExt) {
+            let tbodyCon = document.querySelector('#tablaConceptos tbody');
+            tbodyCon.innerHTML = '';
+            let mostrarTooltip = document.getElementById('chkTooltip').checked;
+
+            listaConceptos.forEach(c => {
+                let idConcepto = String(c.IDcon || '').trim();
+                let descripcion = c.Concepto || '';
+                let unidad = c.UnidadCon || '';
+                
+                let cantOrd = redondear2(parseFloat(String(c.CantidadOrdCon || 0).replace(/[^0-9.-]+/g, "")) || 0);
+                let cantAdic = redondear2(mapaAdic[idConcepto] || 0);
+                let cantExt = redondear2(mapaExt[idConcepto] || 0);
+                let cantReal = redondear2(cantOrd + cantAdic + cantExt);
+                let pu = parseFloat(String(c['P.U.Con'] || '0').replace(/[^0-9.-]+/g, "")) || 0;
+                let montoTotal = redondear2(cantReal * pu);
+
+                let totalGeneradoresOrd = redondear2(mapaGenOrd[idConcepto] || 0);
+                let cantOrdEstim = 0;
+                let cantAdiEstim = 0;
+
+                if (cantAdic < 0) {
+                    cantOrdEstim = redondear2(Math.min(totalGeneradoresOrd, Math.max(0, cantReal)));
+                    cantAdiEstim = 0;
+                } else {
+                    cantOrdEstim = redondear2(Math.min(totalGeneradoresOrd, cantOrd));
+                    let remanenteGen = redondear2(Math.max(0, totalGeneradoresOrd - cantOrd));
+                    cantAdiEstim = redondear2(Math.min(remanenteGen, cantAdic));
+                }
+
+                let cantExtEstim = redondear2(mapaGenExt[idConcepto] || 0);
+                let cantTotalEstim = redondear2(cantOrdEstim + cantAdiEstim + cantExtEstim);
+
+                let montoOrdEstim = redondear2(cantOrdEstim * pu);
+                let montoAdiEstim = redondear2(cantAdiEstim * pu);
+                let montoExtEstim = redondear2(cantExtEstim * pu);
+                let montoTotalEstim = redondear2(cantTotalEstim * pu);
+
+                let cantOrdPorEstimar = 0;
+                let cantAdiPorEstimar = 0;
+                let cantExtPorEstimar = redondear2(Math.max(0, cantExt - cantExtEstim));
+
+                if (cantAdic < 0) {
+                    cantOrdPorEstimar = redondear2(Math.max(0, cantReal - cantOrdEstim));
+                    cantAdiPorEstimar = 0;
+                } else {
+                    cantOrdPorEstimar = redondear2(Math.max(0, cantOrd - cantOrdEstim));
+                    cantAdiPorEstimar = redondear2(Math.max(0, cantAdic - cantAdiEstim));
+                }
+
+                let montoOrdPorEstimar = redondear2(cantOrdPorEstimar * pu);
+                let montoAdiPorEstimar = redondear2(cantAdiPorEstimar * pu);
+                let montoExtPorEstimar = redondear2(cantExtPorEstimar * pu);
+
+                datosConceptosFiltradosActuales.push({
+                    "NCon": c.NCon || '',
+                    "Descripción": descripcion,
+                    "Unidad": unidad,
+                    "Cant. Ord": cantOrd,
+                    "Cant. adic": cantAdic,
+                    "Cant. Ext": cantExt,
+                    "Cant. Real": cantReal,
+                    "P.U.": pu,
+                    "Monto Total": montoTotal,
+                    "Cant. ord_estim": cantOrdEstim,
+                    "Monto_ord_estim": montoOrdEstim,
+                    "Cant. adi_estim": cantAdiEstim,
+                    "Monto_adi_estim": montoAdiEstim,
+                    "Cant. ext_estim": cantExtEstim,
+                    "Monto_ext_estim": montoExtEstim,
+                    "Cant. total_estim": cantTotalEstim,
+                    "Monto_total_estim": montoTotalEstim,
+                    "Cant. ordpor_estimar": cantOrdPorEstimar,
+                    "Monto ordpor_estimar": montoOrdPorEstimar,
+                    "Cant. adipor_estimar": cantAdiPorEstimar,
+                    "Monto adipor_estimar": montoAdiPorEstimar,
+                    "Cant. extpor_estimar": cantExtPorEstimar,
+                    "Monto extpor_estimar": montoExtPorEstimar
+                });
+
+                let claseColor = '';
+                if (cantReal === 0) claseColor = 'text-red-600 font-bold';
+                else if (cantReal === cantTotalEstim) claseColor = 'text-emerald-600 font-bold';
+
+                let tr = document.createElement('tr');
+                if (mostrarTooltip) tr.setAttribute('title', descripcion);
+                tr.className = `hover:bg-blue-50 cursor-pointer transition ${claseColor}`;
+
+                tr.innerHTML = `
+                    <td class="col-0 px-3 py-2 font-mono text-xs font-bold">${c.NCon || ''}</td>
+                    <td class="col-1 px-3 py-2 text-center">${unidad}</td>
+                    <td class="col-2 px-3 py-2 text-right">${formatearNumero(cantOrd)}</td>
+                    <td class="col-3 px-3 py-2 text-right">${formatearNumero(cantAdic)}</td>
+                    <td class="col-4 px-3 py-2 text-right">${formatearNumero(cantExt)}</td>
+                    <td class="col-5 px-3 py-2 text-right font-bold">${formatearNumero(cantReal)}</td>
+                    <td class="col-6 px-3 py-2 text-right">${formatearMoneda(pu)}</td>
+                    <td class="col-7 px-3 py-2 text-right font-semibold">${formatearMoneda(montoTotal)}</td>
+                    <td class="col-8 px-3 py-2 text-right">${formatearNumero(cantOrdEstim)}</td>
+                    <td class="col-9 px-3 py-2 text-right">${formatearMoneda(montoOrdEstim)}</td>
+                    <td class="col-10 px-3 py-2 text-right">${formatearNumero(cantAdiEstim)}</td>
+                    <td class="col-11 px-3 py-2 text-right">${formatearMoneda(montoAdiEstim)}</td>
+                    <td class="col-12 px-3 py-2 text-right">${formatearNumero(cantExtEstim)}</td>
+                    <td class="col-13 px-3 py-2 text-right">${formatearMoneda(montoExtEstim)}</td>
+                    <td class="col-14 px-3 py-2 text-right font-bold">${formatearNumero(cantTotalEstim)}</td>
+                    <td class="col-15 px-3 py-2 text-right font-bold">${formatearMoneda(montoTotalEstim)}</td>
+                    <td class="col-16 px-3 py-2 text-right">${formatearNumero(cantOrdPorEstimar)}</td>
+                    <td class="col-17 px-3 py-2 text-right">${formatearMoneda(montoOrdPorEstimar)}</td>
+                    <td class="col-18 px-3 py-2 text-right">${formatearNumero(cantAdiPorEstimar)}</td>
+                    <td class="col-19 px-3 py-2 text-right">${formatearMoneda(montoAdiPorEstimar)}</td>
+                    <td class="col-20 px-3 py-2 text-right">${formatearNumero(cantExtPorEstimar)}</td>
+                    <td class="col-21 px-3 py-2 text-right">${formatearMoneda(montoExtPorEstimar)}</td>
+                `;
+                aplicarVisibilidadColumnasEnFila(tr);
+                tbodyCon.appendChild(tr);
+            });
+            aplicarVisibilidadColumnasEnFila(document.getElementById('headConceptos'));
+        }
+
+        function generarReporte() {
+            let tipo = document.getElementById('selectTipoReporte').value;
+            let headTr = document.getElementById('headReporte');
+            let bodyTb = document.getElementById('bodyReporte');
+            headTr.innerHTML = '';
+            bodyTb.innerHTML = '';
+            datosReporteActual = [];
+
+            if (tipo === 'partidas') {
+                nombreReporteActual = "Reporte_Partidas";
+                document.getElementById('tituloReporteTabla').innerText = "Resumen por Partida - Importes Estimados";
+                headTr.innerHTML = `<th class="px-4 py-3 text-left font-medium text-gray-500 bg-gray-50">ID Partida</th>
+                                    <th class="px-4 py-3 text-left font-medium text-gray-500 bg-gray-50">Nombre de Partida</th>
+                                    <th class="px-4 py-3 text-right font-medium text-gray-500 bg-gray-50">Importe Original Aprox.</th>`;
+
+                let mapaPartidas = {};
+                if (globalData.Partidas) {
+                    globalData.Partidas.forEach(part => { mapaPartidas[part.IDpart] = { nombre: part.Partida, importe: 0 }; });
+                }
+
+                let mapaSub = {};
+                if (globalData.subpartidas) {
+                    globalData.subpartidas.forEach(sub => { mapaSub[sub.IDSub] = sub.IDpart; });
+                }
+
+                if (globalData.conceptos) {
+                    globalData.conceptos.forEach(con => {
+                        let idPart = mapaSub[con.IDSub];
+                        let cant = parseFloat(String(con.CantidadOrdCon || 0).replace(/[^0-9.-]+/g, "")) || 0;
+                        let pu = parseFloat(String(con['P.U.Con'] || 0).replace(/[^0-9.-]+/g, "")) || 0;
+                        let subtotal = redondear2(cant * pu);
+                        if (idPart && mapaPartidas[idPart]) mapaPartidas[idPart].importe = redondear2(mapaPartidas[idPart].importe + subtotal);
+                    });
+                }
+
+                let labels = [];
+                let valores = [];
+
+                for (let idPart in mapaPartidas) {
+                    let pData = mapaPartidas[idPart];
+                    labels.push(pData.nombre);
+                    valores.push(pData.importe);
+
+                    datosReporteActual.push({ "ID Partida": idPart, "Partida": pData.nombre, "Importe Original": pData.importe });
+
+                    bodyTb.innerHTML += `<tr>
+                        <td class="px-4 py-2 font-mono text-xs">${idPart}</td>
+                        <td class="px-4 py-2 font-medium">${pData.nombre}</td>
+                        <td class="px-4 py-2 text-right font-bold text-blue-900">${formatearMoneda(pData.importe)}</td>
+                    </tr>`;
+                }
+                actualizarGrafica(labels, valores, 'bar', 'Importe por Partida ($)');
+
+            } else if (tipo === 'estimaciones') {
+                nombreReporteActual = "Reporte_Estimaciones";
+                document.getElementById('tituloReporteTabla').innerText = "Historial Completo de Estimaciones";
+                headTr.innerHTML = `<th class="px-4 py-3 text-left font-medium text-gray-500 bg-gray-50">N° Estimación</th>
+                                    <th class="px-4 py-3 text-right font-medium text-gray-500 bg-gray-50">Tipo</th>
+                                    <th class="px-4 py-3 text-left font-medium text-gray-500 bg-gray-50">Periodo Del</th>
+                                    <th class="px-4 py-3 text-left font-medium text-gray-500 bg-gray-50">Periodo Al</th>
+                                    <th class="px-4 py-3 text-left font-medium text-gray-500 bg-gray-50">Fecha Emisión</th>
+                                    <th class="px-4 py-3 text-left font-medium text-gray-500 bg-gray-50">Estatus</th>`;
+
+                let labels = [];
+                let conteoEst = {};
+
+                if (globalData.Estimaciones) {
+                    globalData.Estimaciones.forEach(e => {
+                        let tipoEst = e.tipoEst || 'Ordinario';
+                        conteoEst[tipoEst] = (conteoEst[tipoEst] || 0) + 1;
+                        labels.push(`Est. ${e.NEst}`);
+
+                        datosReporteActual.push({
+                            "N° Estimación": e.NEst, "Tipo": e.tipoEst,
+                            "Fecha Inicio": formatearFechaCorta(e.De), "Fecha Fin": formatearFechaCorta(e.A),
+                            "Fecha Emisión": formatearFechaCorta(e.Fecha), "Estatus": e.status
+                        });
+
+                        bodyTb.innerHTML += `<tr>
+                            <td class="px-4 py-2 font-bold">Est. N° ${e.NEst}</td>
+                            <td class="px-4 py-2 text-right">${e.tipoEst}</td>
+                            <td class="px-4 py-2">${formatearFechaCorta(e.De)}</td>
+                            <td class="px-4 py-2">${formatearFechaCorta(e.A)}</td>
+                            <td class="px-4 py-2">${formatearFechaCorta(e.Fecha)}</td>
+                            <td class="px-4 py-2"><span class="font-semibold">${e.status}</span></td>
+                        </tr>`;
+                    });
+                }
+                actualizarGrafica(Object.keys(conteoEst), Object.values(conteoEst), 'doughnut', 'Distribución por Tipo de Estimación');
+
+            } else if (tipo === 'masmenos') {
+                nombreReporteActual = "Reporte_Ajustes_MasMenos";
+                document.getElementById('tituloReporteTabla').innerText = "Detalle de Ajustes al Contrato";
+                headTr.innerHTML = `<th class="px-4 py-3 text-left font-medium text-gray-500 bg-gray-50">ID Detalle</th>
+                                    <th class="px-4 py-3 text-left font-medium text-gray-500 bg-gray-50">NCon</th>
+                                    <th class="px-4 py-3 text-right font-medium text-gray-500 bg-gray-50">Cantidad Ajuste</th>
+                                    <th class="px-4 py-3 text-right font-medium text-gray-500 bg-gray-50">P.U.</th>
+                                    <th class="px-4 py-3 text-right font-medium text-gray-500 bg-gray-50">Monto Total</th>`;
+
+                let labels = [];
+                let valores = [];
+                let mapaNConR = {};
+
+                if (globalData.conceptos) {
+                    globalData.conceptos.forEach(c => {
+                        let idCon = String(c.IDcon || '').trim();
+                        if (idCon) mapaNConR[idCon] = c.NCon || idCon;
+                    });
+                }
+
+                if (globalData.Det_Masmenos) {
+                    globalData.Det_Masmenos.forEach(det => {
+                        let monto = redondear2(parseFloat(String(det['Monto+-'] || 0).replace(/[^0-9.-]+/g, "")) || 0);
+                        let idCon = String(det.IDcon || '').trim();
+                        let nConOficial = mapaNConR[idCon] || idCon;
+
+                        labels.push(nConOficial);
+                        valores.push(monto);
+
+                        datosReporteActual.push({
+                            "ID Detalle": det['Id_Det+-'], "ID Ajuste Master": det['id+-'],
+                            "NCon": nConOficial, "Cantidad Ajuste": det['cant_+-'],
+                            "P.U.": det['P.U.Con'], "Monto Ajuste": monto
+                        });
+
+                        bodyTb.innerHTML += `<tr>
+                            <td class="px-4 py-2 font-mono text-xs">${det['Id_Det+-']}</td>
+                            <td class="px-4 py-2 font-mono text-xs font-bold text-blue-900">${nConOficial}</td>
+                            <td class="px-4 py-2 text-right">${formatearNumero(det['cant_+-'])}</td>
+                            <td class="px-4 py-2 text-right">${formatearMoneda(det['P.U.Con'])}</td>
+                            <td class="px-4 py-2 text-right font-bold ${monto >= 0 ? 'text-emerald-700' : 'text-red-600'}">${formatearMoneda(monto)}</td>
+                        </tr>`;
+                    });
+                }
+                actualizarGrafica(labels.slice(0, 10), valores.slice(0, 10), 'bar', 'Monto de Ajustes por Concepto (Top 10)');
+            }
+        }
+
+        function actualizarGrafica(labels, data, tipoGrafica, tituloLabel) {
+            const ctx = document.getElementById('graficaReporte').getContext('2d');
+            if (miChart) miChart.destroy();
+
+            miChart = new Chart(ctx, {
+                type: tipoGrafica,
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: tituloLabel,
+                        data: data,
+                        backgroundColor: ['rgba(37, 99, 235, 0.7)', 'rgba(16, 185, 129, 0.7)', 'rgba(245, 158, 11, 0.7)', 'rgba(139, 92, 246, 0.7)', 'rgba(236, 72, 153, 0.7)'],
+                        borderColor: 'rgba(30, 41, 59, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: tipoGrafica === 'doughnut' } } }
+            });
+        }
+
+        function exportarReporteActualExcel() {
+            if (datosReporteActual.length === 0) {
+                alert('No hay datos en el reporte actual para exportar.');
+                return;
+            }
+            let wb = XLSX.utils.book_new();
+            let ws = XLSX.utils.json_to_sheet(datosReporteActual);
+            XLSX.utils.book_append_sheet(wb, ws, "Reporte");
+            XLSX.writeFile(wb, `${nombreReporteActual}.xlsx`);
+        }
+
+        function exportarExcelGeneral() {
+            if (!globalData.conceptos) {
+                alert('Primero espera a que carguen los datos.');
+                return;
+            }
+            let wb = XLSX.utils.book_new();
+            for (let sheetName in globalData) {
+                if (globalData[sheetName].length > 0) {
+                    let ws = XLSX.utils.json_to_sheet(globalData[sheetName]);
+                    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+                }
+            }
+            XLSX.writeFile(wb, 'Reporte_Control_Obra_Completo.xlsx');
+        }
+
+        function cambiarTab(tab) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.getElementById('btnTabConceptos').className = 'pb-2 font-semibold text-gray-500 hover:text-blue-600 focus:outline-none whitespace-nowrap';
+            document.getElementById('btnTabAvanceConceptos').className = 'pb-2 font-semibold text-gray-500 hover:text-blue-600 focus:outline-none whitespace-nowrap';
+            document.getElementById('btnTabEstimaciones').className = 'pb-2 font-semibold text-gray-500 hover:text-blue-600 focus:outline-none whitespace-nowrap';
+            document.getElementById('btnTabMasmenos').className = 'pb-2 font-semibold text-gray-500 hover:text-blue-600 focus:outline-none whitespace-nowrap';
+            document.getElementById('btnTabReportes').className = 'pb-2 font-semibold text-gray-500 hover:text-blue-600 focus:outline-none whitespace-nowrap';
+
+            if (tab === 'conceptos') {
+                document.getElementById('tabConceptos').classList.remove('hidden');
+                document.getElementById('btnTabConceptos').className = 'pb-2 font-semibold text-blue-600 border-b-2 border-blue-600 focus:outline-none whitespace-nowrap';
+            } else if (tab === 'avanceConceptos') {
+                document.getElementById('tabAvanceConceptos').classList.remove('hidden');
+                document.getElementById('btnTabAvanceConceptos').className = 'pb-2 font-semibold text-blue-600 border-b-2 border-blue-600 focus:outline-none whitespace-nowrap';
+            } else if (tab === 'estimaciones') {
+                document.getElementById('tabEstimaciones').classList.remove('hidden');
+                document.getElementById('btnTabEstimaciones').className = 'pb-2 font-semibold text-blue-600 border-b-2 border-blue-600 focus:outline-none whitespace-nowrap';
+                if (miPieChartEst) miPieChartEst.resize();
+            } else if (tab === 'masmenos') {
+                document.getElementById('tabMasmenos').classList.remove('hidden');
+                document.getElementById('btnTabMasmenos').className = 'pb-2 font-semibold text-blue-600 border-b-2 border-blue-600 focus:outline-none whitespace-nowrap';
+            } else if (tab === 'reportes') {
+                document.getElementById('tabReportes').classList.remove('hidden');
+                document.getElementById('btnTabReportes').className = 'pb-2 font-semibold text-blue-600 border-b-2 border-blue-600 focus:outline-none whitespace-nowrap';
+                if (miChart) miChart.resize();
+            }
+        }
+
+        window.onload = cargarDatos;
+    </script>
+</body>
+</html>
