@@ -1,8 +1,8 @@
 const CACHE_NAME = 'control-obra-cache-v1';
 const urlsToCache = [
-  './',
-  './index.html',
-  './manifest.json'
+  '/Control-Obra/',
+  '/Control-Obra/index.html',
+  '/Control-Obra/manifest.json'
 ];
 
 self.addEventListener('install', event => {
