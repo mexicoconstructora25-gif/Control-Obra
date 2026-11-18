@@ -10,5 +10,17 @@
   "theme_color": "#ffffff",
   "id": "https://mexicoconstructora25-gif.github.io/Control-Obra/",
   "description": "Dashboard gerencial para control de obra y estimaciones.",
-  "lang": "es"
+  "lang": "es",
+  "icons": [
+    {
+      "src": "/Control-Obra/icon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/Control-Obra/icon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
 }
